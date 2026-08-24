@@ -1,0 +1,52 @@
+{
+  "meta": {
+    "title": "How Well Do You Know Naomi?",
+    "subtitle": "The Official 40th Birthday Quiz",
+    "honoree": "Naomi",
+    "welcomeMessage": "Welcome! Test your knowledge against Naomi's closest friends to claim your spot in the Hall of Fame.",
+    "heroImage": "/images/20221001_133124.jpg",
+    "theme": {
+      "primaryRed": "#B83B26",
+      "accentOrange": "#D96B27",
+      "highlightPink": "#D86B81",
+      "bgEarth": "#FBF6EF",
+      "surfaceCard": "#FFFFFF",
+      "textDark": "#2B2121"
+    }
+  },
+  "ecard": {
+    "greeting": "Happy 40th, Naomi!",
+    "subGreeting": "Four fabulous decades 🎉🥂",
+    "message": "Gather round, friends! Before the cake is cut and the champagne flows, let's celebrate the birthday girl. Flip through the memories floating by... then test how well you really know Naomi.",
+    "buttonText": "Open Naomi's Birthday Quiz →",
+    "photos": [
+      { "src": "/images/FB_IMG_1784518454066.jpg", "caption": "The early years" },
+      { "src": "/images/FB_IMG_1784518479009.jpg", "caption": "Adventures abroad" },
+      { "src": "/images/FB_IMG_1784518556540.jpg", "caption": "Big nights out" },
+      { "src": "/images/FB_IMG_1784518643534.jpg", "caption": "Besties forever" },
+      { "src": "/images/IMG_5143.JPG", "caption": "That famous laugh" },
+      { "src": "/images/IMG_5888.JPG", "caption": "Forever 21... ish" }
+    ]
+  },
+  "audio": {
+    "backgroundMusic": "birthday-lounge.mp3",
+    "correctSound": "ding.mp3",
+    "wrongSound": "buzz.mp3"
+  },
+  "scoreTiers": [
+    { "minPercent": 0,  "maxPercent": 40,  "title": "Casual Acquaintance 😬", "message": "Are you sure you're at the right party? Time to buy Naomi a drink and catch up!" },
+    { "minPercent": 41, "maxPercent": 75,  "title": "Solid Mate 👍",           "message": "Not bad! You know Naomi pretty well, but a few core memories slipped past you." },
+    { "minPercent": 76, "maxPercent": 89,  "title": "Ride or Die 💖",          "message": "Seriously impressive. You've clearly logged some quality Naomi hours over the years." },
+    { "minPercent": 90, "maxPercent": 100, "title": "Naomi's Inner Circle 👑", "message": "Legendary score! You either have a vault of Naomi memories or you helped write these questions." }
+  ],
+  "questions": [
+    { "id": 1, "submittedBy": "Sarah", "type": "text",  "question": "What was Naomi's very first job back in high school?",           "image": null,                        "options": ["Scooping ice cream", "Working the checkout at Coles", "Delivering local newspapers", "Barista at a beachfront cafe"], "correctIndex": 0, "funFact": "She lasted 3 weeks before getting banned from eating the cookie dough!", "audioClip": null },
+    { "id": 2, "submittedBy": "Dave",  "type": "photo", "question": "Where was this photo of Naomi taken during her 2018 trip?",      "image": "/images/naomi-trip-2018.jpg", "options": ["Kyoto, Japan", "Florence, Italy", "Queenstown, New Zealand", "Oahu, Hawaii"], "correctIndex": 2, "funFact": "Taken 30 seconds before she dropped her sunglasses off the chairlift.", "audioClip": "cheer.mp3" },
+    { "id": 3, "submittedBy": "Priya", "type": "text",  "question": "What is Naomi's go-to karaoke song?",                           "image": null,                        "options": ["Total Eclipse of the Heart", "Wannabe — Spice Girls", "Dancing Queen — ABBA", "Torn — Natalie Imbruglia"], "correctIndex": 2, "funFact": "She insists on the full key change and refuses to share the mic.", "audioClip": null },
+    { "id": 4, "submittedBy": "Tom",   "type": "text",  "question": "Which pet did Naomi adopt first?",                               "image": null,                        "options": ["Mango the cat", "Biscuit the dog", "Kevin the tortoise", "Nigel the budgie"], "correctIndex": 1, "funFact": "Biscuit is now 12 and still steals socks from every houseguest.", "audioClip": null },
+    { "id": 5, "submittedBy": "Meg",   "type": "photo", "question": "What was the theme of Naomi's legendary 30th birthday party?",  "image": "/images/naomi-30th.jpg",    "options": ["1970s Disco", "Great Gatsby", "Tropical Luau", "Masquerade Ball"], "correctIndex": 0, "funFact": "The disco ball is still hanging in her garage to this day.", "audioClip": "cheer.mp3" },
+    { "id": 6, "submittedBy": "Alex",  "type": "text",  "question": "What food will Naomi absolutely NOT eat, no matter what?",      "image": null,                        "options": ["Mushrooms", "Olives", "Blue cheese", "Beetroot"], "correctIndex": 1, "funFact": "She once returned a pizza because a single olive touched a slice.", "audioClip": null },
+    { "id": 7, "submittedBy": "Jess",  "type": "text",  "question": "In which city did Naomi live when she first moved out of home?", "image": null,                        "options": ["Melbourne", "Brisbane", "Perth", "Adelaide"], "correctIndex": 0, "funFact": "She swears the Melbourne coffee ruined her for everywhere else.", "audioClip": null },
+    { "id": 8, "submittedBy": "Sarah", "type": "photo", "question": "What hobby did Naomi unexpectedly pick up during 2020?",         "image": "/images/naomi-hobby.jpg",   "options": ["Pottery", "Sourdough baking", "Rock climbing", "Watercolour painting"], "correctIndex": 1, "funFact": "Her starter is named 'Gary' and has his own spot in the fridge.", "audioClip": null }
+  ]
+}

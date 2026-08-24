@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Event Quiz</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+  <div id="mp3-player" class="mp3-player" aria-label="Music player">
+    <div class="mp3-header" id="mp3-toggle">
+      <span class="mp3-emoji" id="mp3-emoji">🎵</span>
+      <span class="mp3-label" id="mp3-label">Party Tunes</span>
+      <span class="mp3-chevron" id="mp3-chevron">▲</span>
+    </div>
+    <div class="mp3-panel" id="mp3-panel">
+      <div class="mp3-track" id="mp3-track">No track loaded</div>
+      <div class="mp3-controls">
+        <button type="button" id="mp3-prev" title="Previous">⏮</button>
+        <button type="button" id="mp3-play" title="Play / Pause">▶</button>
+        <button type="button" id="mp3-next" title="Next">⏭</button>
+      </div>
+      <input type="range" id="mp3-volume" min="0" max="1" step="0.05" value="0.3" title="Volume" />
+    </div>
+  </div>
+
+  <main class="app">
+
+    <!-- SCREEN 0: E-Card Intro -->
+    <section id="screen-ecard" class="screen ecard active">
+      <div class="photo-board" id="photo-board" aria-hidden="true"></div>
+      <div class="ecard-center">
+        <div class="ecard-confetti">🎈🎉🥂🎂🎈</div>
+        <h1 id="ecard-greeting" class="ecard-greeting">Welcome!</h1>
+        <p id="ecard-sub" class="ecard-sub"></p>
+        <p id="ecard-message" class="ecard-message"></p>
+        <button id="ecard-start" class="btn btn-primary ecard-btn" type="button">Start the Quiz →</button>
+      </div>
+    </section>
+
+    <!-- SCREEN 1: Welcome / Name Entry -->
+    <section id="screen-welcome" class="screen card">
+      <img id="welcome-hero" class="hero-image" alt="" hidden />
+      <h1 id="welcome-title" class="title">Loading…</h1>
+      <p id="welcome-subtitle" class="subtitle"></p>
+      <p id="welcome-message" class="lead"></p>
+      <form id="name-form" class="name-form" novalidate>
+        <label for="player-name" class="field-label">What's your name?</label>
+        <input id="player-name" class="text-input" type="text" maxlength="30"
+               placeholder="Enter your name…" autocomplete="off" />
+        <p id="name-error" class="error-text" role="alert" hidden>Please enter your name to start.</p>
+        <button type="submit" class="btn btn-primary btn-block">Start Quiz →</button>
+      </form>
+    </section>
+
+    <!-- SCREEN 2: Quiz -->
+    <section id="screen-quiz" class="screen card">
+      <div class="progress-head">
+        <span id="progress-label" class="progress-label">Question 1 of 1</span>
+        <span id="progress-by" class="progress-by"></span>
+      </div>
+      <div class="progress-bar">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+      <div id="question-anim" class="question-anim">
+        <img id="question-image" class="question-image" alt="" hidden />
+        <h2 id="question-text" class="question-text"></h2>
+        <div id="options" class="options"></div>
+      </div>
+      <button id="next-btn" class="btn btn-primary btn-block" type="button" disabled>Next</button>
+    </section>
+
+    <!-- SCREEN 3: Results & Hall of Fame -->
+    <section id="screen-results" class="screen card">
+      <h1 id="tier-title" class="title"></h1>
+      <div class="score-ring">
+        <span id="score-percent" class="score-percent">0%</span>
+        <span id="score-raw" class="score-raw">0 / 0</span>
+      </div>
+      <p id="tier-message" class="lead"></p>
+      <div id="hall-of-fame" class="hall-of-fame">
+        <h3 class="hof-title">🏆 Hall of Fame 🏆</h3>
+        <div id="hof-rows" class="hof-rows">
+          <div class="hof-loading">Loading…</div>
+        </div>
+      </div>
+      <button id="play-again-btn" class="btn btn-secondary btn-block" type="button">Play Again ↺</button>
+    </section>
+
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
