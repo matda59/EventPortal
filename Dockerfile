@@ -22,6 +22,7 @@ COPY . .
 # /app/public/music  — mount a volume here for persistent music files
 VOLUME ["/app/data", "/app/public/images", "/app/public/music"]
 
+# Set ADMIN_TOKEN at runtime (Unraid extra parameters). Required for /admin.
 EXPOSE 3000
 
 # Seed the database on first boot if it hasn't been seeded yet, then start.

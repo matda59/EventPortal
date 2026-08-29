@@ -7,14 +7,22 @@ const express = require('express');
 const cors    = require('cors');
 const db      = require('./db');
 
+const admin = require('./admin');
+
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
 const PUBLIC_DIR      = path.join(__dirname, '..', 'public');
+const ADMIN_DIR       = path.join(__dirname, '..', 'admin');
 const MUSIC_DIR       = path.join(PUBLIC_DIR, 'music');
+const IMAGES_DIR      = path.join(PUBLIC_DIR, 'images');
 const MAX_LEADERBOARD = 25;
 
+fsp.mkdir(IMAGES_DIR, { recursive: true }).catch(() => {});
+fsp.mkdir(MUSIC_DIR,  { recursive: true }).catch(() => {});
+
 app.use(cors());
+app.use('/api/admin', admin);
 app.use(express.json({ limit: '16kb' }));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -161,49 +169,20 @@ app.get('/api/music', async (_req, res) => {
 });
 
 // ── Static files ──────────────────────────────────────────────────────────────
+// index:false so public/index.html is not served at /. The quiz SPA is /e/:slug only.
 
-app.use(express.static(PUBLIC_DIR));
+app.use(express.static(PUBLIC_DIR, { index: false }));
 
-// Serve the quiz SPA for any event slug
 app.get('/e/:slug', (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
-// Root redirect → show a simple portal page (will become admin dashboard in Session 4)
-app.get('/', (_req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Event Portal</title>
-      <style>
-        body { font-family: system-ui, sans-serif; display: flex; align-items: center;
-               justify-content: center; min-height: 100vh; margin: 0;
-               background: #f8fafc; color: #1e293b; }
-        .card { text-align: center; padding: 48px 40px; background: white;
-                border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.1);
-                max-width: 420px; }
-        h1 { font-size: 2rem; margin-bottom: 8px; }
-        p  { color: #64748b; margin-bottom: 24px; line-height: 1.6; }
-        a  { display: inline-block; padding: 12px 28px; background: #6366f1;
-             color: white; border-radius: 8px; text-decoration: none;
-             font-weight: 600; transition: background 0.2s; }
-        a:hover { background: #4f46e5; }
-      </style>
-    </head>
-    <body>
-      <div class="card">
-        <div style="font-size:3rem;margin-bottom:16px">🎉</div>
-        <h1>Event Portal</h1>
-        <p>Admin dashboard coming soon. Events are live at <code>/e/your-slug</code>.</p>
-        <a href="/e/naomi40th">View Naomi's 40th →</a>
-      </div>
-    </body>
-    </html>
-  `);
+app.use('/admin', express.static(ADMIN_DIR, { index: false }));
+app.get(/^\/admin(\/.*)?$/, (_req, res) => {
+  res.sendFile(path.join(ADMIN_DIR, 'index.html'));
 });
+
+app.get('/', (_req, res) => res.redirect(302, '/admin'));
 
 // Catch-all API 404
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found.' }));
@@ -211,6 +190,10 @@ app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found.' }));
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
-  console.log(`🎉 Event portal running → http://localhost:${PORT}`);
-  console.log(`   Naomi's quiz         → http://localhost:${PORT}/e/naomi40th`);
+  console.log(`Event portal running → http://localhost:${PORT}`);
+  console.log(`  Admin dashboard    → http://localhost:${PORT}/admin`);
+  console.log(`  Public quiz        → http://localhost:${PORT}/e/<slug>`);
+  if (!process.env.ADMIN_TOKEN || process.env.ADMIN_TOKEN.length < 8) {
+    console.warn('  ADMIN_TOKEN is not set — /admin login will be unavailable.');
+  }
 });
