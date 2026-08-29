@@ -11,8 +11,10 @@
   const pathParts  = window.location.pathname.replace(/^\/+/, '').split('/');
   const EVENT_SLUG = pathParts[1] || 'naomi40th'; // pathParts[0] = 'e'
 
-  const CONFIG_URL = `/api/events/${EVENT_SLUG}/public-config`;
-  const SCORES_URL = `/api/events/${EVENT_SLUG}/scores`;
+  const CONFIG_URL   = `/api/events/${EVENT_SLUG}/public-config`;
+  const SCORES_URL   = `/api/events/${EVENT_SLUG}/scores`;
+  const SESSIONS_URL = `/api/events/${EVENT_SLUG}/sessions`;
+  const MUSIC_URL    = `/api/events/${EVENT_SLUG}/music`;
 
   // ── App state ──────────────────────────────────────────────────────
   const state = {
@@ -22,7 +24,9 @@
     score: 0,
     selectedIndex: null,
     answered: false,
-    playerName: ''
+    grading: false,
+    playerName: '',
+    sessionId: null,
   };
 
   // ── Element cache ──────────────────────────────────────────────────
@@ -131,6 +135,7 @@
       e.preventDefault();
       const name = $('player-name').value.trim();
       if (!name) {
+        $('name-error').textContent = 'Please enter your name to start.';
         $('name-error').hidden = false;
         $('player-name').focus();
         return;
@@ -148,14 +153,50 @@
     $('play-again-btn').addEventListener('click', resetAndRestart);
   }
 
+  function showQuizError(msg) {
+    let el = $('quiz-error');
+    if (!el) {
+      el = document.createElement('p');
+      el.id = 'quiz-error';
+      el.className = 'error-text';
+      el.setAttribute('role', 'alert');
+      $('screen-quiz').insertBefore(el, $('next-btn'));
+    }
+    el.textContent = msg || '';
+    el.hidden = !msg;
+  }
+
+  async function apiJson(url, options) {
+    const res = await fetch(url, options);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error || `Request failed (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
   // ── Quiz flow ──────────────────────────────────────────────────────
-  function startQuiz() {
-    state.current = 0;
-    state.score   = 0;
-    const bg = state.config.audio && state.config.audio.backgroundMusic;
-    if (bg) window.playAudioTrack(bg);
-    showScreen('quiz');
-    renderQuestion();
+  async function startQuiz() {
+    try {
+      const started = await apiJson(SESSIONS_URL, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ name: state.playerName }),
+      });
+      state.sessionId = started.sessionId;
+      state.current   = 0;
+      state.score     = 0;
+      const bg = state.config.audio && state.config.audio.backgroundMusic;
+      if (bg) window.playAudioTrack(bg);
+      showQuizError('');
+      showScreen('quiz');
+      renderQuestion();
+    } catch (err) {
+      $('name-error').textContent = err.message || 'Could not start the quiz.';
+      $('name-error').hidden = false;
+    }
   }
 
   function renderQuestion() {
@@ -163,6 +204,8 @@
     const total = state.questions.length;
     state.selectedIndex = null;
     state.answered      = false;
+    state.grading       = false;
+    showQuizError('');
 
     $('progress-label').textContent = `Question ${state.current + 1} of ${total}`;
     $('progress-by').textContent    = q.submittedBy ? `Asked by ${q.submittedBy}` : '';
@@ -200,31 +243,53 @@
     nextBtn.textContent = state.current === total - 1 ? 'See Results →' : 'Next';
   }
 
-  function selectOption(index) {
-    if (state.answered) return;
-    state.answered      = true;
+  async function selectOption(index) {
+    if (state.answered || state.grading) return;
+    state.grading       = true;
     state.selectedIndex = index;
+    showQuizError('');
 
     const q         = state.questions[state.current];
     const optionEls = Array.from($('options').children);
     optionEls.forEach((el, i) => {
       el.disabled = true;
-      if (i === q.correctIndex) el.classList.add('correct');
-      if (i === index && i !== q.correctIndex) el.classList.add('wrong');
       if (i === index) el.classList.add('selected');
     });
 
-    if (index === q.correctIndex) { state.score += 1; playCue(q, 'correct'); }
-    else                          { playCue(q, 'wrong'); }
+    try {
+      const result = await apiJson(`${SESSIONS_URL}/${encodeURIComponent(state.sessionId)}/answers`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ questionId: q.id, selectedIndex: index }),
+      });
+      state.answered = true;
+      if (Number.isFinite(result.score)) state.score = result.score;
 
-    if (q.funFact) {
-      const fact       = document.createElement('p');
-      fact.className   = 'fun-fact';
-      fact.textContent = `💡 ${q.funFact}`;
-      $('question-anim').appendChild(fact);
+      optionEls.forEach((el, i) => {
+        if (i === result.correctIndex) el.classList.add('correct');
+        if (i === index && i !== result.correctIndex) el.classList.add('wrong');
+      });
+
+      if (result.correct) playCue(q, 'correct');
+      else                playCue(q, 'wrong');
+
+      if (q.funFact) {
+        const fact       = document.createElement('p');
+        fact.className   = 'fun-fact';
+        fact.textContent = `💡 ${q.funFact}`;
+        $('question-anim').appendChild(fact);
+      }
+
+      $('next-btn').disabled = false;
+    } catch (err) {
+      optionEls.forEach((el) => {
+        el.disabled = false;
+        el.classList.remove('selected');
+      });
+      showQuizError(err.message || 'Could not grade that answer. Try again.');
+    } finally {
+      state.grading = false;
     }
-
-    $('next-btn').disabled = false;
   }
 
   function playCue(question, kind) {
@@ -268,16 +333,14 @@
     await submitScore(total);
   }
 
-  async function submitScore(total) {
+  async function submitScore(_total) {
     try {
-      const res = await fetch(SCORES_URL, {
+      const rows = await apiJson(SCORES_URL, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ name: state.playerName, score: state.score,
-                                  totalQuestions: total, timestamp: Date.now() }),
+        body:    JSON.stringify({ sessionId: state.sessionId }),
       });
-      if (!res.ok) throw new Error('POST failed');
-      renderHallOfFame(await res.json());
+      renderHallOfFame(rows);
     } catch {
       try {
         const res = await fetch(SCORES_URL);
@@ -311,6 +374,7 @@
   function resetAndRestart() {
     $('player-name').value = '';
     state.playerName = '';
+    state.sessionId  = null;
     state.current    = 0;
     state.score      = 0;
     showScreen('welcome');
@@ -326,7 +390,7 @@
 
   async function setupMp3Player() {
     try {
-      const res  = await fetch('/api/music');
+      const res  = await fetch(MUSIC_URL);
       const files = res.ok ? await res.json() : [];
       mp3.tracks  = files.map((f) => ({
         name: f.replace(/\.mp3$/i, '').replace(/[_-]+/g, ' '),

@@ -188,6 +188,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .section-title { font-size: 1.05rem; margin: 8px 0 12px; }
 .hint { color: var(--muted); font-size: 0.85rem; margin-bottom: 12px; }
 
+.playlist-picks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  margin-bottom: 8px;
+}
+.check.playlist-check { padding-top: 0; font-weight: 500; word-break: break-all; }
+
 .color-row { display: flex; gap: 8px; align-items: center; }
 .color-row input[type="color"] { width: 42px; height: 34px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
 .color-row input[type="text"] { flex: 1; }
@@ -288,5 +296,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .nav-link { width: auto; }
   .content { padding: 18px 14px 40px; }
   .form-grid { grid-template-columns: 1fr; }
+  .playlist-picks { grid-template-columns: 1fr; }
   .span-2 { grid-column: auto; }
 }

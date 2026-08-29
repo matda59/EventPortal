@@ -468,6 +468,12 @@ router.put('/events/:id/quiz', (req, res) => {
   if (!title) return res.status(400).json({ error: 'Quiz title is required.' });
 
   const audio      = (body.audio && typeof body.audio === 'object') ? body.audio : parseJson(quiz.audio_json, {});
+  const playlist = Array.isArray(audio.playlist)
+    ? audio.playlist
+        .map((n) => str(path.basename(String(n || '')), 160, ''))
+        .filter((n) => n && /\.mp3$/i.test(n))
+        .slice(0, 80)
+    : [];
   const scoreTiers = Array.isArray(body.scoreTiers) ? body.scoreTiers : parseJson(quiz.score_tiers_json, []);
   const ecard      = (body.ecard && typeof body.ecard === 'object') ? body.ecard : parseJson(quiz.ecard_json, {});
 
@@ -495,6 +501,7 @@ router.put('/events/:id/quiz', (req, res) => {
     backgroundMusic: str(audio.backgroundMusic, 160, ''),
     correctSound:    str(audio.correctSound, 160, ''),
     wrongSound:      str(audio.wrongSound, 160, ''),
+    playlist,
   };
 
   db.prepare(`

@@ -290,6 +290,21 @@
         `<option value="${esc(f.name)}" ${f.name === cur ? 'selected' : ''}>${esc(f.name)}</option>`).join('');
     };
 
+    function playlistPicker(selected) {
+      const picked = new Set((Array.isArray(selected) ? selected : []).map(String));
+      const files = state.media.music || [];
+      if (!files.length && !picked.size) {
+        return '<p class="hint">Upload MP3s under Media, then tick them here.</p>';
+      }
+      const extra = [...picked].filter((n) => n && !files.some((f) => f.name === n));
+      const items = files.map((f) => f.name).concat(extra);
+      return `<div class="playlist-picks">${items.map((name) => `
+        <label class="check playlist-check">
+          <input type="checkbox" class="playlist-track" value="${esc(name)}" ${picked.has(name) ? 'checked' : ''} />
+          ${esc(name)}
+        </label>`).join('')}</div>`;
+    }
+
     return `
       <h2 class="section-title">Quiz copy</h2>
       <div class="form-grid">
@@ -319,7 +334,7 @@
       </div>
 
       <h2 class="section-title" style="margin-top:28px">Audio cues</h2>
-      <p class="hint">Filenames from the music volume. Guests also hear every MP3 via the player.</p>
+      <p class="hint">Sound effects for this quiz. Guests only hear the guest playlist below — not every MP3 on the host.</p>
       <div class="form-grid">
         <div class="field">
           <label for="audio-bg">Background</label>
@@ -334,6 +349,10 @@
           <select id="audio-bad">${musicOpts(audio.wrongSound)}</select>
         </div>
       </div>
+
+      <h2 class="section-title" style="margin-top:28px">Guest playlist</h2>
+      <p class="hint">Tick the tracks that should appear in this event’s public player. Background music is included automatically.</p>
+      ${playlistPicker(audio.playlist)}
 
       <h2 class="section-title" style="margin-top:28px">E-card</h2>
       <div class="form-grid">
@@ -622,6 +641,7 @@
         backgroundMusic: val('audio-bg'),
         correctSound: val('audio-ok'),
         wrongSound: val('audio-bad'),
+        playlist: Array.from(document.querySelectorAll('.playlist-track:checked')).map((el) => el.value),
       },
       ecard: {
         greeting: val('ecard-greeting'),
