@@ -95,6 +95,68 @@
     if (theme.bgEarth)       root.setProperty('--bg-earth',       theme.bgEarth);
     if (theme.surfaceCard)   root.setProperty('--surface-card',   theme.surfaceCard);
     if (theme.textDark)      root.setProperty('--text-dark',      theme.textDark);
+    const color = theme.primaryRed || theme.accentOrange;
+    if (color) {
+      let meta = document.querySelector('meta[name="theme-color"]');
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.name = 'theme-color';
+        document.head.appendChild(meta);
+      }
+      meta.content = color;
+    }
+  }
+
+  function occasionKey(type) {
+    return String(type || '').trim().toLowerCase();
+  }
+
+  function occasionCopy(meta) {
+    const honoree = (meta && meta.honoree) || '';
+    const key = occasionKey(meta && meta.occasionType);
+    const table = {
+      birthday: {
+        greeting: honoree ? `Happy Birthday, ${honoree}!` : 'Happy Birthday!',
+        confetti: '🎈🎉🥂🎂🎈',
+        music: 'Party tunes',
+      },
+      wedding: {
+        greeting: honoree ? `Congratulations, ${honoree}!` : 'Congratulations!',
+        confetti: '💐💍🥂✨💐',
+        music: 'Playlist',
+      },
+      retirement: {
+        greeting: honoree ? `Happy retirement, ${honoree}!` : 'Happy retirement!',
+        confetti: '🌅🎉🥂⛳',
+        music: 'Playlist',
+      },
+      'kids party': {
+        greeting: honoree ? `Let's celebrate, ${honoree}!` : "Let's celebrate!",
+        confetti: '🎈🦄🌈⭐🎈',
+        music: 'Playlist',
+      },
+      anniversary: {
+        greeting: honoree ? `Happy anniversary, ${honoree}!` : 'Happy anniversary!',
+        confetti: '💕🥂✨🌹💕',
+        music: 'Playlist',
+      },
+      holiday: {
+        greeting: honoree ? `Happy holidays, ${honoree}!` : 'Happy holidays!',
+        confetti: '❄️🎄✨🎁❄️',
+        music: 'Playlist',
+      },
+    };
+    return table[key] || {
+      greeting: honoree ? `Welcome, ${honoree}!` : 'Welcome!',
+      confetti: '✨🎉✨',
+      music: 'Playlist',
+    };
+  }
+
+  function hasEcard(ecard) {
+    if (!ecard || typeof ecard !== 'object') return false;
+    if (ecard.greeting || ecard.subGreeting || ecard.message || ecard.buttonText) return true;
+    return Array.isArray(ecard.photos) && ecard.photos.some((p) => p && (p.src || p.caption));
   }
 
   // ── Load config ────────────────────────────────────────────────────
@@ -123,8 +185,11 @@
 
     const meta = state.config.meta || {};
     const f    = guestFlags();
+    const copy = occasionCopy(meta);
     applyTheme(meta.theme);
     document.title = meta.title || (f.status === 'ended' ? 'Event ended' : 'Quiz');
+    const musicLabel = $('mp3-label');
+    if (musicLabel) musicLabel.textContent = copy.music;
 
     if (f.status === 'ended') {
       showUnavailable({
@@ -150,20 +215,30 @@
     }
 
     state.questions = Array.isArray(state.config.questions) ? state.config.questions : [];
-    renderEcard(state.config.ecard || {}, meta);
     applyGuestFlags();
     setupMp3Player();
     wireEvents();
+
+    const ecard = state.config.ecard || {};
+    if (hasEcard(ecard)) {
+      renderEcard(ecard, meta);
+      showScreen('ecard');
+    } else {
+      showScreen('welcome');
+    }
   }
 
   // ── E-Card intro + floating photo board ────────────────────────────
   function renderEcard(ecard, meta) {
-    const honoree = meta.honoree || '';
-    $('ecard-greeting').textContent = ecard.greeting  || (honoree ? `Happy Birthday, ${honoree}!` : 'Welcome!');
+    const copy = occasionCopy(meta);
+    $('ecard-confetti').textContent = ecard.confetti || copy.confetti;
+    $('ecard-greeting').textContent = ecard.greeting  || copy.greeting;
     $('ecard-sub').textContent      = ecard.subGreeting || '';
     $('ecard-message').textContent  = ecard.message    || meta.welcomeMessage || '';
     $('ecard-start').textContent    = ecard.buttonText
       || (guestFlags().enableQuiz ? 'Start the Quiz →' : 'Continue →');
+    const label = $('mp3-label');
+    if (label) label.textContent = copy.music;
     buildPhotoBoard(Array.isArray(ecard.photos) ? ecard.photos : []);
   }
 

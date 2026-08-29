@@ -4,14 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Event Quiz</title>
+  <meta name="theme-color" content="#B83B26" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%89%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
 
-  <div id="mp3-player" class="mp3-player" aria-label="Music player">
+  <div id="mp3-player" class="mp3-player" aria-label="Music player" hidden>
     <div class="mp3-header" id="mp3-toggle">
       <span class="mp3-emoji" id="mp3-emoji">🎵</span>
-      <span class="mp3-label" id="mp3-label">Party Tunes</span>
+      <span class="mp3-label" id="mp3-label">Playlist</span>
       <span class="mp3-chevron" id="mp3-chevron">▲</span>
     </div>
     <div class="mp3-panel" id="mp3-panel">
@@ -28,10 +30,10 @@
   <main class="app">
 
     <!-- SCREEN 0: E-Card Intro -->
-    <section id="screen-ecard" class="screen ecard active">
+    <section id="screen-ecard" class="screen ecard">
       <div class="photo-board" id="photo-board" aria-hidden="true"></div>
       <div class="ecard-center">
-        <div class="ecard-confetti">🎈🎉🥂🎂🎈</div>
+        <div class="ecard-confetti" id="ecard-confetti">✨🎉✨</div>
         <h1 id="ecard-greeting" class="ecard-greeting">Welcome!</h1>
         <p id="ecard-sub" class="ecard-sub"></p>
         <p id="ecard-message" class="ecard-message"></p>
@@ -40,7 +42,7 @@
     </section>
 
     <!-- SCREEN 1: Welcome / Name Entry -->
-    <section id="screen-welcome" class="screen card">
+    <section id="screen-welcome" class="screen card active">
       <img id="welcome-hero" class="hero-image" alt="" hidden />
       <h1 id="welcome-title" class="title">Loading…</h1>
       <p id="welcome-subtitle" class="subtitle"></p>

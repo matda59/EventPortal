@@ -15,6 +15,74 @@
     textDark:      '#2B2121',
   };
 
+  const THEME_PRESETS = {
+    birthday: {
+      label: 'Birthday',
+      emoji: '🎉',
+      theme: DEFAULT_THEME,
+    },
+    wedding: {
+      label: 'Wedding',
+      emoji: '💍',
+      theme: {
+        primaryRed:    '#6B3A5A',
+        accentOrange:  '#C4A574',
+        highlightPink: '#D4A5B8',
+        bgEarth:       '#F7F3EE',
+        surfaceCard:   '#FFFFFF',
+        textDark:      '#2C2428',
+      },
+    },
+    retirement: {
+      label: 'Retirement',
+      emoji: '🌅',
+      theme: {
+        primaryRed:    '#1F4E5A',
+        accentOrange:  '#C49A3C',
+        highlightPink: '#7A9E9F',
+        bgEarth:       '#F4F1EA',
+        surfaceCard:   '#FFFFFF',
+        textDark:      '#243033',
+      },
+    },
+    'kids-party': {
+      label: 'Kids party',
+      emoji: '🦄',
+      theme: {
+        primaryRed:    '#E23D6B',
+        accentOrange:  '#FF8A3D',
+        highlightPink: '#7C5CFF',
+        bgEarth:       '#FFF7EC',
+        surfaceCard:   '#FFFFFF',
+        textDark:      '#2B2140',
+      },
+    },
+    anniversary: {
+      label: 'Anniversary',
+      emoji: '💕',
+      theme: {
+        primaryRed:    '#8B2942',
+        accentOrange:  '#C9A227',
+        highlightPink: '#D97B93',
+        bgEarth:       '#FBF4F1',
+        surfaceCard:   '#FFFFFF',
+        textDark:      '#2A1C20',
+      },
+    },
+    holiday: {
+      label: 'Holiday',
+      emoji: '🎄',
+      theme: {
+        primaryRed:    '#165B3A',
+        accentOrange:  '#C4A35A',
+        highlightPink: '#A63D2F',
+        bgEarth:       '#F3F0E7',
+        surfaceCard:   '#FFFFFF',
+        textDark:      '#1F2A24',
+      },
+    },
+  };
+
   const THEME_FIELDS = [
     ['primaryRed',    'Primary'],
     ['accentOrange',  'Accent'],
@@ -186,6 +254,7 @@
         <div class="card-actions">
           <button class="btn btn-primary btn-sm" data-go="/admin/events/${esc(ev.id)}">Edit</button>
           <a class="btn btn-ghost btn-sm" href="/e/${esc(ev.slug)}" target="_blank" rel="noopener">Open quiz</a>
+          <button class="btn btn-ghost btn-sm" type="button" data-copy="/e/${esc(ev.slug)}">Copy link</button>
           <button class="btn btn-ghost btn-sm" data-delete-event="${esc(ev.id)}" data-slug="${esc(ev.slug)}">Delete</button>
         </div>
       </article>`).join('') : '<p class="empty">No events yet. Create one to get a public quiz at /e/your-slug.</p>';
@@ -205,6 +274,17 @@
         </main>
       </div>`;
     bindShell();
+    $app.querySelectorAll('[data-copy]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const url = location.origin + btn.getAttribute('data-copy');
+        try {
+          await navigator.clipboard.writeText(url);
+          toast('Copied guest link');
+        } catch {
+          toast(url);
+        }
+      });
+    });
     $app.querySelectorAll('[data-delete-event]').forEach((btn) => {
       btn.addEventListener('click', () => deleteEvent(btn.getAttribute('data-delete-event'), btn.getAttribute('data-slug')));
     });
@@ -270,7 +350,18 @@
         <label class="check"><input type="checkbox" id="ev-quiz" ${ev.enableQuiz !== false ? 'checked' : ''} /> Enable quiz</label>
         <label class="check"><input type="checkbox" id="ev-hof" ${ev.enableLeaderboard !== false ? 'checked' : ''} /> Enable leaderboard</label>
         <p class="hint span-2">Quiz off: e-card and welcome only — no name form or questions. Leaderboard off: guests still see their score, but Hall of Fame is hidden and nothing is posted.</p>
-        <div class="span-2"><p class="hint">Theme colours are applied to the public quiz SPA.</p></div>
+        <div class="field span-2">
+          <label for="ev-preset">Theme preset</label>
+          <div class="path-pick">
+            <select id="ev-preset">
+              <option value="custom" ${!ev.themePreset || ev.themePreset === 'custom' ? 'selected' : ''}>Custom</option>
+              ${Object.entries(THEME_PRESETS).map(([id, p]) =>
+                `<option value="${esc(id)}" ${ev.themePreset === id ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}
+            </select>
+            <button class="btn btn-ghost" type="button" id="apply-preset">Apply colours</button>
+          </div>
+        </div>
+        <p class="hint span-2">Presets fill the colour pickers below. Save the event to keep them. They apply to the public quiz, not this admin screen.</p>
         ${colors}
       </div>
       <div class="row" style="margin-top:18px">
@@ -357,6 +448,7 @@
       ${playlistPicker(audio.playlist)}
 
       <h2 class="section-title" style="margin-top:28px">E-card</h2>
+      <p class="hint">Leave greeting, message, and photos blank to skip the intro and go straight to the welcome screen.</p>
       <div class="form-grid">
         <div class="field">
           <label for="ecard-greeting">Greeting</label>
@@ -544,6 +636,8 @@
     });
     const saveEv = document.getElementById('save-event');
     if (saveEv) saveEv.addEventListener('click', () => saveEvent(isNew));
+    const applyPreset = document.getElementById('apply-preset');
+    if (applyPreset) applyPreset.addEventListener('click', applyThemePreset);
 
     const saveQuiz = document.getElementById('save-quiz');
     if (saveQuiz) saveQuiz.addEventListener('click', saveQuizCopy);
@@ -598,6 +692,25 @@
     }));
   }
 
+  function applyThemePreset() {
+    const id = val('ev-preset');
+    const preset = THEME_PRESETS[id];
+    if (!preset) {
+      toast('Pick a named preset first', 'err');
+      return;
+    }
+    THEME_FIELDS.forEach(([key]) => {
+      const hex = preset.theme[key];
+      const text = document.getElementById('theme-' + key);
+      const picker = document.getElementById('theme-' + key + '-picker');
+      if (text && hex) text.value = hex;
+      if (picker && hex) picker.value = hex;
+    });
+    const emoji = document.getElementById('ev-emoji');
+    if (emoji && preset.emoji) emoji.value = preset.emoji;
+    toast('Colours applied — save the event to keep them');
+  }
+
   async function saveEvent(isNew) {
     const payload = {
       name: val('ev-name'),
@@ -608,6 +721,7 @@
       headerEmoji: val('ev-emoji'),
       enableQuiz: val('ev-quiz'),
       enableLeaderboard: val('ev-hof'),
+      themePreset: val('ev-preset') || 'custom',
       theme: readThemeFromForm(),
     };
     try {
