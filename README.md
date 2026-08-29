@@ -21,15 +21,23 @@ npm start
 
 Image: `ghcr.io/matda59/event-portal:latest` (built on every push to `main`).
 
-Mount these volumes and nothing else — a bind of `/app` or all of `/app/public` hides image updates:
+**Do not mount `/app/api` or all of `/app/public`.** Those overlays hide image updates, so Force Update still shows old JS. Only persist data and media:
 
-| Host path              | Container path        |
-|------------------------|-----------------------|
-| appdata SQLite folder  | `/app/data`           |
-| photos                 | `/app/public/images`  |
-| MP3s                   | `/app/public/music`   |
+```bash
+docker run -d \
+  --name='event-portal' \
+  --net='bridge' \
+  --pids-limit 2048 \
+  -e TZ="Australia/Sydney" \
+  -e ADMIN_TOKEN="pick-a-long-secret" \
+  -p '4546:3000/tcp' \
+  -v '/mnt/user/appdata/EventPortal/data':'/app/data':'rw' \
+  -v '/mnt/user/appdata/EventPortal/public/images':'/app/public/images':'rw' \
+  -v '/mnt/user/appdata/EventPortal/public/music':'/app/public/music':'rw' \
+  'ghcr.io/matda59/event-portal:latest'
+```
 
-Set `ADMIN_TOKEN` (minimum 8 characters) as a container variable.
+After a pull, confirm the new image with `http://<unraid>:4546/api/version` — `sha` should match the latest GitHub commit. Container logs also print `Build → <sha>`.
 
 ## Guest flags
 

@@ -435,19 +435,48 @@ app.get('/api/music', (_req, res) => {
   res.status(404).json({ error: 'Use /api/events/:slug/music' });
 });
 
+const GIT_SHA = process.env.GIT_SHA || 'dev';
+const ASSET_V = GIT_SHA.slice(0, 7);
+
+app.get('/api/version', (_req, res) => {
+  res.json({ name: 'event-portal', sha: GIT_SHA });
+});
+
+async function sendHtml(file, req, res) {
+  try {
+    let html = await fsp.readFile(file, 'utf8');
+    html = html.replace(/(href|src)="([^"]+\.(?:css|js))"/g, `$1="$2?v=${ASSET_V}"`);
+    res.type('html').send(html);
+  } catch (err) {
+    console.error('sendHtml:', err);
+    res.status(500).type('text').send('Unable to load page.');
+  }
+}
+
+function noCacheAssets(_req, res, next) {
+  res.setHeader('Cache-Control', 'no-cache');
+  next();
+}
+
 // ── Static files ──────────────────────────────────────────────────────────────
 // index:false so public/index.html is not served at /. The quiz SPA is /e/:slug only.
 
-app.use(express.static(PUBLIC_DIR, { index: false }));
+app.use(express.static(PUBLIC_DIR, {
+  index: false,
+  setHeaders(res, filePath) {
+    if (/\.(js|css)$/.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+  },
+}));
 
-app.get('/e/:slug', (_req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
-});
+app.get('/e/:slug', (req, res) => sendHtml(path.join(PUBLIC_DIR, 'index.html'), req, res));
 
-app.use('/admin', express.static(ADMIN_DIR, { index: false }));
-app.get(/^\/admin(\/.*)?$/, (_req, res) => {
-  res.sendFile(path.join(ADMIN_DIR, 'index.html'));
-});
+app.use('/admin', noCacheAssets, express.static(ADMIN_DIR, {
+  index: false,
+  setHeaders(res, filePath) {
+    if (/\.(js|css)$/.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+  },
+}));
+app.get(/^\/admin(\/.*)?$/, (req, res) => sendHtml(path.join(ADMIN_DIR, 'index.html'), req, res));
 
 app.get('/', (_req, res) => res.redirect(302, '/admin'));
 
@@ -460,6 +489,7 @@ app.listen(PORT, () => {
   console.log(`Event portal running → http://localhost:${PORT}`);
   console.log(`  Admin dashboard    → http://localhost:${PORT}/admin`);
   console.log(`  Public quiz        → http://localhost:${PORT}/e/<slug>`);
+  console.log(`  Build              → ${GIT_SHA}`);
   if (!process.env.ADMIN_TOKEN || process.env.ADMIN_TOKEN.length < 8) {
     console.warn('  ADMIN_TOKEN is not set — /admin login will be unavailable.');
   }

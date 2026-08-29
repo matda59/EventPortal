@@ -10,6 +10,8 @@ RUN npm install
 # ── Stage 2: production image ──────────────────────────────────────────────────
 FROM node:20-alpine
 WORKDIR /app
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
 
 # Copy compiled node_modules from builder (no build tools in final image)
 COPY --from=builder /app/node_modules ./node_modules
