@@ -17,9 +17,8 @@ COPY --from=builder /app/node_modules ./node_modules
 # Copy application source
 COPY . .
 
-# /app/data is where the SQLite database lives — mount a volume here on Unraid
-# /app/public/images — mount a volume here for persistent uploaded images
-# /app/public/music  — mount a volume here for persistent music files
+# Persist only data + media. Do not bind-mount /app, /app/api, or all of /app/public
+# or Unraid will hide image updates. Set ADMIN_TOKEN at runtime.
 VOLUME ["/app/data", "/app/public/images", "/app/public/music"]
 
 # Set ADMIN_TOKEN at runtime (Unraid extra parameters). Required for /admin.
