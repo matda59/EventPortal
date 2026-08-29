@@ -228,6 +228,8 @@ app.get('/api/events/:slug/public-config', (req, res) => {
         flags: {
           enableQuiz:        false,
           enableLeaderboard: false,
+          enableGallery:     false,
+          enableMusic:       false,
           status:            'ended',
         },
       });
@@ -262,6 +264,8 @@ app.get('/api/events/:slug/public-config', (req, res) => {
       flags: {
         enableQuiz:        !!event.enable_quiz,
         enableLeaderboard: !!event.enable_leaderboard,
+        enableGallery:     event.enable_gallery == null ? true : !!event.enable_gallery,
+        enableMusic:       event.enable_music == null ? true : !!event.enable_music,
         status:            'active',
       },
     });
@@ -427,6 +431,7 @@ app.get('/api/events/:slug/music', async (req, res) => {
   try {
     const event = findActiveEvent(req.params.slug);
     if (!event) return res.status(404).json({ error: 'Event not found.' });
+    if (event.enable_music === 0) return res.json([]);
     const quiz = quizForEvent(event.id);
     res.json(await listExistingMp3s(eventPlaylistNames(quiz)));
   } catch (err) {

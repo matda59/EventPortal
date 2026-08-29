@@ -83,6 +83,15 @@
     },
   };
 
+  const OCCASIONS = [
+    { value: 'Birthday',    preset: 'birthday' },
+    { value: 'Wedding',     preset: 'wedding' },
+    { value: 'Anniversary', preset: 'anniversary' },
+    { value: 'Retirement',  preset: 'retirement' },
+    { value: 'Kids party',  preset: 'kids-party' },
+    { value: 'Holiday',     preset: 'holiday' },
+  ];
+
   const THEME_FIELDS = [
     ['primaryRed',    'Primary'],
     ['accentOrange',  'Accent'],
@@ -247,9 +256,10 @@
         </p>
         <p class="meta" style="margin-top:8px">
           ${ev.enableQuiz ? 'Quiz on' : 'Quiz off'}
-          · ${ev.enableLeaderboard ? 'Leaderboard on' : 'Leaderboard off'}
+          · ${ev.enableGallery !== false ? 'Gallery on' : 'Gallery off'}
+          · ${ev.enableMusic !== false ? 'Music on' : 'Music off'}
+          · ${ev.enableLeaderboard ? 'Hall of Fame on' : 'Hall of Fame off'}
           · ${ev.questionCount || 0} question${ev.questionCount === 1 ? '' : 's'}
-          · ${ev.scoreCount || 0} score${ev.scoreCount === 1 ? '' : 's'}
         </p>
         <div class="card-actions">
           <button class="btn btn-primary btn-sm" data-go="/admin/events/${esc(ev.id)}">Edit</button>
@@ -325,11 +335,15 @@
         </div>
         <div class="field">
           <label for="ev-occasion">Occasion</label>
-          <input id="ev-occasion" value="${esc(ev.occasionType || 'Birthday')}" list="occasion-list" />
-          <datalist id="occasion-list">
-            <option value="Birthday"><option value="Wedding"><option value="Retirement">
-            <option value="Kids party"><option value="Anniversary">
-          </datalist>
+          <select id="ev-occasion">
+            ${OCCASIONS.map((o) =>
+              `<option value="${esc(o.value)}" ${(ev.occasionType || 'Birthday') === o.value ? 'selected' : ''}>${esc(o.value)}</option>`).join('')}
+            <option value="Other" ${ev.occasionType && !OCCASIONS.some((o) => o.value === ev.occasionType) ? 'selected' : ''}>Other</option>
+          </select>
+        </div>
+        <div class="field" id="ev-occasion-custom-wrap" ${ev.occasionType && !OCCASIONS.some((o) => o.value === ev.occasionType) ? '' : 'hidden'}>
+          <label for="ev-occasion-custom">Custom occasion</label>
+          <input id="ev-occasion-custom" value="${esc(ev.occasionType && !OCCASIONS.some((o) => o.value === ev.occasionType) ? ev.occasionType : '')}" placeholder="Engagement, christening…" />
         </div>
         <div class="field">
           <label for="ev-date">Event date</label>
@@ -347,9 +361,40 @@
           <input id="ev-emoji" value="${esc(ev.headerEmoji || '🎉')}" maxlength="8" />
         </div>
         <p class="hint span-2">draft is hidden from guests. active is live at /e/slug. ended shows “this event has ended”.</p>
-        <label class="check"><input type="checkbox" id="ev-quiz" ${ev.enableQuiz !== false ? 'checked' : ''} /> Enable quiz</label>
-        <label class="check"><input type="checkbox" id="ev-hof" ${ev.enableLeaderboard !== false ? 'checked' : ''} /> Enable leaderboard</label>
-        <p class="hint span-2">Quiz off: e-card and welcome only — no name form or questions. Leaderboard off: guests still see their score, but Hall of Fame is hidden and nothing is posted.</p>
+        <div class="span-2">
+          <h2 class="section-title">Guest features</h2>
+          <p class="hint">Turn on what this event should include. After you create it, add photos, tracks, and questions on the next tabs.</p>
+          <div class="feature-grid">
+            <label class="feature-card">
+              <input type="checkbox" id="ev-quiz" ${ev.enableQuiz !== false ? 'checked' : ''} />
+              <span>
+                <strong>Quiz</strong>
+                <small>Name form and questions</small>
+              </span>
+            </label>
+            <label class="feature-card">
+              <input type="checkbox" id="ev-gallery" ${ev.enableGallery !== false ? 'checked' : ''} />
+              <span>
+                <strong>Photo gallery</strong>
+                <small>Polaroids on the intro e-card</small>
+              </span>
+            </label>
+            <label class="feature-card">
+              <input type="checkbox" id="ev-music" ${ev.enableMusic !== false ? 'checked' : ''} />
+              <span>
+                <strong>Music player</strong>
+                <small>Guest playlist of uploaded MP3s</small>
+              </span>
+            </label>
+            <label class="feature-card">
+              <input type="checkbox" id="ev-hof" ${ev.enableLeaderboard !== false ? 'checked' : ''} />
+              <span>
+                <strong>Hall of Fame</strong>
+                <small>Public leaderboard after the quiz</small>
+              </span>
+            </label>
+          </div>
+        </div>
         <div class="field span-2">
           <label for="ev-preset">Theme preset</label>
           <div class="path-pick">
@@ -444,11 +489,11 @@
       </div>
 
       <h2 class="section-title" style="margin-top:28px">Guest playlist</h2>
-      <p class="hint">Tick the tracks that should appear in this event’s public player. Background music is included automatically.</p>
+      <p class="hint">Tick the tracks that should appear in this event’s public player. Shown to guests when Music player is on. Background music is included automatically.</p>
       ${playlistPicker(audio.playlist)}
 
       <h2 class="section-title" style="margin-top:28px">E-card</h2>
-      <p class="hint">Leave greeting, message, and photos blank to skip the intro and go straight to the welcome screen.</p>
+      <p class="hint">Leave greeting, message, and photos blank to skip the intro. Polaroids show when Photo gallery is on.</p>
       <div class="form-grid">
         <div class="field">
           <label for="ecard-greeting">Greeting</label>
@@ -574,7 +619,7 @@
 
   function renderEditor() {
     const isNew = state.eventId === 'new';
-    const detail = state.detail || { event: { status: 'draft', enableQuiz: true, enableLeaderboard: true, theme: DEFAULT_THEME }, quiz: null, questions: [] };
+    const detail = state.detail || { event: { status: 'draft', enableQuiz: true, enableLeaderboard: true, enableGallery: true, enableMusic: true, occasionType: 'Birthday', themePreset: 'birthday', theme: DEFAULT_THEME }, quiz: null, questions: [] };
     const ev = detail.event || {};
     const tabs = isNew ? '' : `
       <div class="tabs">
@@ -603,7 +648,7 @@
             <div>
               <button class="btn btn-ghost btn-sm" data-go="/admin" style="margin-bottom:8px">← All events</button>
               <h1>${isNew ? 'New event' : esc(ev.name || 'Event')}</h1>
-              ${isNew ? '<p class="sub">Save the event first, then add quiz copy and questions.</p>' : `<p class="sub"><a href="/e/${esc(ev.slug || '')}" target="_blank" rel="noopener">/e/${esc(ev.slug || '')}</a></p>`}
+              ${isNew ? '<p class="sub">Pick the occasion and which guest features to include, then save.</p>' : `<p class="sub"><a href="/e/${esc(ev.slug || '')}" target="_blank" rel="noopener">/e/${esc(ev.slug || '')}</a></p>`}
             </div>
             ${!isNew && ev.slug ? `<a class="btn btn-ghost" href="/e/${esc(ev.slug)}" target="_blank" rel="noopener">Open public quiz</a>` : ''}
           </div>
@@ -638,6 +683,8 @@
     if (saveEv) saveEv.addEventListener('click', () => saveEvent(isNew));
     const applyPreset = document.getElementById('apply-preset');
     if (applyPreset) applyPreset.addEventListener('click', applyThemePreset);
+    const occasion = document.getElementById('ev-occasion');
+    if (occasion) occasion.addEventListener('change', syncOccasionUi);
 
     const saveQuiz = document.getElementById('save-quiz');
     if (saveQuiz) saveQuiz.addEventListener('click', saveQuizCopy);
@@ -693,12 +740,12 @@
   }
 
   function applyThemePreset() {
-    const id = val('ev-preset');
+    if (!fillThemePreset(val('ev-preset'))) toast('Pick a named preset first', 'err');
+  }
+
+  function fillThemePreset(id, opts) {
     const preset = THEME_PRESETS[id];
-    if (!preset) {
-      toast('Pick a named preset first', 'err');
-      return;
-    }
+    if (!preset) return false;
     THEME_FIELDS.forEach(([key]) => {
       const hex = preset.theme[key];
       const text = document.getElementById('theme-' + key);
@@ -708,26 +755,40 @@
     });
     const emoji = document.getElementById('ev-emoji');
     if (emoji && preset.emoji) emoji.value = preset.emoji;
-    toast('Colours applied — save the event to keep them');
+    const sel = document.getElementById('ev-preset');
+    if (sel) sel.value = id;
+    if (!opts || opts.toast !== false) toast('Colours applied — save the event to keep them');
+    return true;
+  }
+
+  function syncOccasionUi() {
+    const v = val('ev-occasion');
+    const wrap = document.getElementById('ev-occasion-custom-wrap');
+    if (wrap) wrap.hidden = v !== 'Other';
+    const match = OCCASIONS.find((o) => o.value === v);
+    if (match && match.preset) fillThemePreset(match.preset, { toast: false });
   }
 
   async function saveEvent(isNew) {
+    const occasionSel = val('ev-occasion');
     const payload = {
       name: val('ev-name'),
       slug: val('ev-slug'),
-      occasionType: val('ev-occasion'),
+      occasionType: occasionSel === 'Other' ? (val('ev-occasion-custom').trim() || 'Other') : occasionSel,
       eventDate: val('ev-date') || null,
       status: val('ev-status'),
       headerEmoji: val('ev-emoji'),
       enableQuiz: val('ev-quiz'),
       enableLeaderboard: val('ev-hof'),
+      enableGallery: val('ev-gallery'),
+      enableMusic: val('ev-music'),
       themePreset: val('ev-preset') || 'custom',
       theme: readThemeFromForm(),
     };
     try {
       if (isNew) {
         const created = await api('/events', { method: 'POST', body: JSON.stringify(payload) });
-        toast('Event created');
+        toast('Event created. Add photos, music, and questions on the next tabs.');
         state.detail = created;
         state.tab = 'quiz';
         go('/admin/events/' + created.event.id);
@@ -1082,7 +1143,7 @@
         renderEditor();
       } else if (state.view === 'editor') {
         await loadMedia();
-        state.detail = { event: { status: 'draft', enableQuiz: true, enableLeaderboard: true, theme: DEFAULT_THEME }, quiz: null, questions: [] };
+        state.detail = { event: { status: 'draft', enableQuiz: true, enableLeaderboard: true, enableGallery: true, enableMusic: true, occasionType: 'Birthday', themePreset: 'birthday', theme: DEFAULT_THEME }, quiz: null, questions: [] };
         renderEditor();
       }
     } catch (err) {

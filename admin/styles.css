@@ -172,6 +172,29 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .check { display: flex; align-items: center; gap: 8px; font-weight: 600; padding-top: 22px; }
 .check input { width: 16px; height: 16px; }
 
+.feature-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 8px;
+}
+.feature-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 500;
+}
+.feature-card:hover { border-color: var(--accent); }
+.feature-card input { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+.feature-card span { display: flex; flex-direction: column; gap: 2px; }
+.feature-card strong { font-size: 0.95rem; }
+.feature-card small { color: var(--muted); font-weight: 500; font-size: 0.82rem; line-height: 1.35; }
+
 .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin-bottom: 20px; flex-wrap: wrap; }
 .tab {
   background: none;
@@ -296,6 +319,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .nav-link { width: auto; }
   .content { padding: 18px 14px 40px; }
   .form-grid { grid-template-columns: 1fr; }
+  .feature-grid { grid-template-columns: 1fr; }
   .playlist-picks { grid-template-columns: 1fr; }
   .span-2 { grid-column: auto; }
 }

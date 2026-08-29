@@ -56,6 +56,8 @@
     return {
       enableQuiz:        f.enableQuiz !== false,
       enableLeaderboard: f.enableLeaderboard !== false,
+      enableGallery:     f.enableGallery !== false,
+      enableMusic:       f.enableMusic !== false,
       status:            f.status || 'active',
     };
   }
@@ -156,6 +158,7 @@
   function hasEcard(ecard) {
     if (!ecard || typeof ecard !== 'object') return false;
     if (ecard.greeting || ecard.subGreeting || ecard.message || ecard.buttonText) return true;
+    if (!guestFlags().enableGallery) return false;
     return Array.isArray(ecard.photos) && ecard.photos.some((p) => p && (p.src || p.caption));
   }
 
@@ -239,7 +242,7 @@
       || (guestFlags().enableQuiz ? 'Start the Quiz →' : 'Continue →');
     const label = $('mp3-label');
     if (label) label.textContent = copy.music;
-    buildPhotoBoard(Array.isArray(ecard.photos) ? ecard.photos : []);
+    buildPhotoBoard(guestFlags().enableGallery && Array.isArray(ecard.photos) ? ecard.photos : []);
   }
 
   function buildPhotoBoard(photos) {
@@ -529,6 +532,11 @@
   }
 
   async function setupMp3Player() {
+    if (!guestFlags().enableMusic) {
+      mp3.tracks = [];
+      $('mp3-player').hidden = true;
+      return;
+    }
     try {
       const res  = await fetch(MUSIC_URL);
       const files = res.ok ? await res.json() : [];

@@ -107,6 +107,8 @@ function serializeEvent(row, extras = {}) {
     headerEmoji:       row.header_emoji,
     enableQuiz:        !!row.enable_quiz,
     enableLeaderboard: !!row.enable_leaderboard,
+    enableGallery:     row.enable_gallery == null ? true : !!row.enable_gallery,
+    enableMusic:       row.enable_music == null ? true : !!row.enable_music,
     createdAt:         row.created_at,
     updatedAt:         row.updated_at,
     ...extras,
@@ -362,8 +364,8 @@ router.post('/events', (req, res) => {
     db.prepare(`
       INSERT INTO events
         (id, slug, name, occasion_type, event_date, status, theme_preset, theme_json,
-         header_emoji, enable_quiz, enable_leaderboard)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       slugRes.slug,
@@ -376,6 +378,8 @@ router.post('/events', (req, res) => {
       str(body.headerEmoji, 8, '🎉'),
       body.enableQuiz === false ? 0 : 1,
       body.enableLeaderboard === false ? 0 : 1,
+      body.enableGallery === false ? 0 : 1,
+      body.enableMusic === false ? 0 : 1,
     );
     ensureQuiz(id, name);
   });
@@ -426,7 +430,7 @@ router.put('/events/:id', (req, res) => {
     UPDATE events SET
       slug = ?, name = ?, occasion_type = ?, event_date = ?, status = ?,
       theme_preset = ?, theme_json = ?, header_emoji = ?,
-      enable_quiz = ?, enable_leaderboard = ?,
+      enable_quiz = ?, enable_leaderboard = ?, enable_gallery = ?, enable_music = ?,
       updated_at = datetime('now')
     WHERE id = ?
   `).run(
@@ -440,6 +444,8 @@ router.put('/events/:id', (req, res) => {
       str(body.headerEmoji, 8, event.header_emoji || '🎉'),
       body.enableQuiz === undefined ? event.enable_quiz : (body.enableQuiz ? 1 : 0),
       body.enableLeaderboard === undefined ? event.enable_leaderboard : (body.enableLeaderboard ? 1 : 0),
+      body.enableGallery === undefined ? (event.enable_gallery == null ? 1 : event.enable_gallery) : (body.enableGallery ? 1 : 0),
+      body.enableMusic === undefined ? (event.enable_music == null ? 1 : event.enable_music) : (body.enableMusic ? 1 : 0),
       event.id,
   );
 

@@ -25,6 +25,8 @@ db.exec(`
     header_emoji  TEXT DEFAULT '🎉',
     enable_quiz        INTEGER NOT NULL DEFAULT 0,
     enable_leaderboard INTEGER NOT NULL DEFAULT 0,
+    enable_gallery     INTEGER NOT NULL DEFAULT 1,
+    enable_music       INTEGER NOT NULL DEFAULT 1,
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -108,5 +110,12 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_scores_session
     ON score_submissions(session_id) WHERE session_id IS NOT NULL
 `);
+
+function addColumnIfMissing(table, name, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+}
+addColumnIfMissing('events', 'enable_gallery', 'enable_gallery INTEGER NOT NULL DEFAULT 1');
+addColumnIfMissing('events', 'enable_music', 'enable_music INTEGER NOT NULL DEFAULT 1');
 
 module.exports = db;
