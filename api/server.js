@@ -37,6 +37,10 @@ function parseJson(str, fallback) {
   try { return JSON.parse(str); } catch { return fallback; }
 }
 
+function findEventBySlug(slug) {
+  return db.prepare('SELECT * FROM events WHERE slug = ?').get(slug);
+}
+
 function findActiveEvent(slug) {
   return db.prepare("SELECT * FROM events WHERE slug = ? AND status = 'active'").get(slug);
 }
@@ -197,10 +201,36 @@ const submitScoreTx = db.transaction((session) => {
 
 app.get('/api/events/:slug/public-config', (req, res) => {
   try {
-    const event = findActiveEvent(req.params.slug);
-    if (!event) return res.status(404).json({ error: 'Event not found or unavailable.' });
+    const event = findEventBySlug(req.params.slug);
+    // Draft and missing look the same so unpublished slugs stay private.
+    if (!event || event.status === 'draft') {
+      return res.status(404).json({ error: 'Event not found or unavailable.' });
+    }
 
     const quiz = quizForEvent(event.id);
+
+    if (event.status === 'ended') {
+      return res.json({
+        meta: {
+          title:          quiz?.title          ?? event.name,
+          subtitle:       quiz?.subtitle       ?? null,
+          honoree:        quiz?.honoree        ?? null,
+          welcomeMessage: 'This event has ended. Thanks for celebrating with us.',
+          heroImage:      quiz?.hero_image     ?? null,
+          theme:          parseJson(event.theme_json || quiz?.theme_json, {}),
+        },
+        ecard:      {},
+        audio:      {},
+        scoreTiers: [],
+        questions:  [],
+        flags: {
+          enableQuiz:        false,
+          enableLeaderboard: false,
+          status:            'ended',
+        },
+      });
+    }
+
     const questions = quiz ? questionsForQuiz(quiz.id) : [];
 
     res.json({
@@ -228,6 +258,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
       flags: {
         enableQuiz:        !!event.enable_quiz,
         enableLeaderboard: !!event.enable_leaderboard,
+        status:            'active',
       },
     });
   } catch (err) {
@@ -335,7 +366,8 @@ app.post('/api/events/:slug/sessions/:id/answers', limitAnswers, (req, res) => {
 app.get('/api/events/:slug/scores', (req, res) => {
   try {
     const event = findActiveEvent(req.params.slug);
-    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    if (!event)                    return res.status(404).json({ error: 'Event not found.' });
+    if (!event.enable_leaderboard) return res.status(403).json({ error: 'Leaderboard not enabled.' });
     res.json(rankAndFormat(fetchScores(event.id)));
   } catch (err) {
     console.error('GET scores:', err);

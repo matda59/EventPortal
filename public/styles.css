@@ -21,6 +21,7 @@
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
   font-family: "Segoe UI", "Helvetica Neue", system-ui, sans-serif;

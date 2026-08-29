@@ -266,8 +266,10 @@
           <label for="ev-emoji">Header emoji</label>
           <input id="ev-emoji" value="${esc(ev.headerEmoji || '🎉')}" maxlength="8" />
         </div>
+        <p class="hint span-2">draft is hidden from guests. active is live at /e/slug. ended shows “this event has ended”.</p>
         <label class="check"><input type="checkbox" id="ev-quiz" ${ev.enableQuiz !== false ? 'checked' : ''} /> Enable quiz</label>
         <label class="check"><input type="checkbox" id="ev-hof" ${ev.enableLeaderboard !== false ? 'checked' : ''} /> Enable leaderboard</label>
+        <p class="hint span-2">Quiz off: e-card and welcome only — no name form or questions. Leaderboard off: guests still see their score, but Hall of Fame is hidden and nothing is posted.</p>
         <div class="span-2"><p class="hint">Theme colours are applied to the public quiz SPA.</p></div>
         ${colors}
       </div>

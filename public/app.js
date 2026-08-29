@@ -51,6 +51,41 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function guestFlags() {
+    const f = (state.config && state.config.flags) || {};
+    return {
+      enableQuiz:        f.enableQuiz !== false,
+      enableLeaderboard: f.enableLeaderboard !== false,
+      status:            f.status || 'active',
+    };
+  }
+
+  function showUnavailable({ title, subtitle, message, heroImage }) {
+    document.title = title;
+    $('welcome-title').textContent    = title;
+    $('welcome-subtitle').textContent = subtitle || '';
+    $('welcome-message').textContent  = message || '';
+    $('name-form').hidden = true;
+    const hero = $('welcome-hero');
+    if (heroImage) {
+      hero.src    = heroImage;
+      hero.alt    = title || '';
+      hero.hidden = false;
+      hero.onerror = () => { hero.hidden = true; };
+    } else {
+      hero.hidden = true;
+      hero.removeAttribute('src');
+    }
+    showScreen('welcome');
+  }
+
+  function applyGuestFlags() {
+    const f = guestFlags();
+    $('name-form').hidden       = !f.enableQuiz;
+    $('hall-of-fame').hidden    = !f.enableLeaderboard;
+    $('play-again-btn').hidden  = !f.enableQuiz;
+  }
+
   function applyTheme(theme) {
     if (!theme) return;
     const root = document.documentElement.style;
@@ -66,21 +101,44 @@
   async function init() {
     try {
       const res = await fetch(CONFIG_URL);
+      if (res.status === 404) {
+        showUnavailable({
+          title:   'Event not found',
+          message: 'This event link may be invalid or is not available yet.',
+        });
+        setupMp3Player();
+        return;
+      }
       if (!res.ok) throw new Error(`Config not found (${res.status})`);
       state.config = await res.json();
     } catch (err) {
-      $('welcome-title').textContent   = 'Event not found';
-      $('welcome-message').textContent = 'This event link may be invalid or the event has ended.';
-      showScreen('welcome');
+      showUnavailable({
+        title:   'Event not found',
+        message: 'This event link may be invalid or the event has ended.',
+      });
+      setupMp3Player();
       console.error(err);
       return;
     }
 
     const meta = state.config.meta || {};
+    const f    = guestFlags();
     applyTheme(meta.theme);
-    document.title = meta.title || 'Quiz';
-    $('welcome-title').textContent    = meta.title         || 'Quiz';
-    $('welcome-subtitle').textContent = meta.subtitle      || '';
+    document.title = meta.title || (f.status === 'ended' ? 'Event ended' : 'Quiz');
+
+    if (f.status === 'ended') {
+      showUnavailable({
+        title:     meta.title || 'This event has ended',
+        subtitle:  meta.subtitle || '',
+        message:   meta.welcomeMessage || 'This event has ended. Thanks for celebrating with us.',
+        heroImage: meta.heroImage,
+      });
+      setupMp3Player();
+      return;
+    }
+
+    $('welcome-title').textContent    = meta.title          || 'Quiz';
+    $('welcome-subtitle').textContent = meta.subtitle       || '';
     $('welcome-message').textContent  = meta.welcomeMessage || '';
 
     if (meta.heroImage) {
@@ -93,6 +151,7 @@
 
     state.questions = Array.isArray(state.config.questions) ? state.config.questions : [];
     renderEcard(state.config.ecard || {}, meta);
+    applyGuestFlags();
     setupMp3Player();
     wireEvents();
   }
@@ -103,7 +162,8 @@
     $('ecard-greeting').textContent = ecard.greeting  || (honoree ? `Happy Birthday, ${honoree}!` : 'Welcome!');
     $('ecard-sub').textContent      = ecard.subGreeting || '';
     $('ecard-message').textContent  = ecard.message    || meta.welcomeMessage || '';
-    $('ecard-start').textContent    = ecard.buttonText || 'Start the Quiz →';
+    $('ecard-start').textContent    = ecard.buttonText
+      || (guestFlags().enableQuiz ? 'Start the Quiz →' : 'Continue →');
     buildPhotoBoard(Array.isArray(ecard.photos) ? ecard.photos : []);
   }
 
@@ -128,7 +188,7 @@
   function wireEvents() {
     $('ecard-start').addEventListener('click', () => {
       showScreen('welcome');
-      setTimeout(() => $('player-name').focus(), 300);
+      if (guestFlags().enableQuiz) setTimeout(() => $('player-name').focus(), 300);
     });
 
     $('name-form').addEventListener('submit', (e) => {
@@ -330,7 +390,12 @@
     document.querySelector('.score-ring').style.setProperty('--ring-pct', `${percent}%`);
 
     showScreen('results');
-    await submitScore(total);
+    if (guestFlags().enableLeaderboard) {
+      $('hall-of-fame').hidden = false;
+      await submitScore(total);
+    } else {
+      $('hall-of-fame').hidden = true;
+    }
   }
 
   async function submitScore(_total) {
@@ -398,6 +463,7 @@
       }));
     } catch { mp3.tracks = []; }
 
+    $('mp3-player').hidden = !mp3.tracks.length;
     updateMp3Label();
     $('mp3-toggle').addEventListener('click', () => {
       mp3.open = !mp3.open;
