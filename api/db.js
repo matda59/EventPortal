@@ -74,6 +74,39 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_scores_event
     ON score_submissions(event_id, score);
+
+  CREATE TABLE IF NOT EXISTS quiz_sessions (
+    id                TEXT PRIMARY KEY,
+    event_id          TEXT NOT NULL,
+    player_name       TEXT NOT NULL,
+    question_ids_json TEXT NOT NULL,
+    score             INTEGER NOT NULL DEFAULT 0,
+    total_questions   INTEGER NOT NULL,
+    submitted         INTEGER NOT NULL DEFAULT 0,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_sessions_event
+    ON quiz_sessions(event_id, created_at);
+
+  CREATE TABLE IF NOT EXISTS quiz_answers (
+    session_id     TEXT NOT NULL,
+    question_id    TEXT NOT NULL,
+    selected_index INTEGER NOT NULL,
+    is_correct     INTEGER NOT NULL,
+    PRIMARY KEY (session_id, question_id),
+    FOREIGN KEY (session_id) REFERENCES quiz_sessions(id) ON DELETE CASCADE
+  );
+`);
+
+const scoreCols = db.prepare('PRAGMA table_info(score_submissions)').all();
+if (!scoreCols.some((c) => c.name === 'session_id')) {
+  db.exec('ALTER TABLE score_submissions ADD COLUMN session_id TEXT');
+}
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_scores_session
+    ON score_submissions(session_id) WHERE session_id IS NOT NULL
 `);
 
 module.exports = db;

@@ -31,7 +31,8 @@
   "audio": {
     "backgroundMusic": "birthday-lounge.mp3",
     "correctSound": "ding.mp3",
-    "wrongSound": "buzz.mp3"
+    "wrongSound": "buzz.mp3",
+    "playlist": ["birthday-lounge.mp3"]
   },
   "scoreTiers": [
     { "minPercent": 0,  "maxPercent": 40,  "title": "Casual Acquaintance 😬", "message": "Are you sure you're at the right party? Time to buy Naomi a drink and catch up!" },
