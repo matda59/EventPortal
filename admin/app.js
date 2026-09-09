@@ -260,11 +260,14 @@
           · ${ev.enableMusic !== false ? 'Music on' : 'Music off'}
           · ${ev.enableLeaderboard ? 'Hall of Fame on' : 'Hall of Fame off'}
           · ${ev.questionCount || 0} question${ev.questionCount === 1 ? '' : 's'}
+          · ${ev.scoreCount || 0} score${ev.scoreCount === 1 ? '' : 's'}
         </p>
         <div class="card-actions">
           <button class="btn btn-primary btn-sm" data-go="/admin/events/${esc(ev.id)}">Edit</button>
           <a class="btn btn-ghost btn-sm" href="/e/${esc(ev.slug)}" target="_blank" rel="noopener">Open quiz</a>
           <button class="btn btn-ghost btn-sm" type="button" data-copy="/e/${esc(ev.slug)}">Copy link</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-qr="/e/${esc(ev.slug)}" data-qr-name="${esc(ev.name)}">QR</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-duplicate="${esc(ev.id)}">Duplicate</button>
           <button class="btn btn-ghost btn-sm" data-delete-event="${esc(ev.id)}" data-slug="${esc(ev.slug)}">Delete</button>
         </div>
       </article>`).join('') : '<p class="empty">No events yet. Create one to get a public quiz at /e/your-slug.</p>';
@@ -295,6 +298,14 @@
         }
       });
     });
+    $app.querySelectorAll('[data-qr]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        showQrModal(location.origin + btn.getAttribute('data-qr'), btn.getAttribute('data-qr-name') || 'Event');
+      });
+    });
+    $app.querySelectorAll('[data-duplicate]').forEach((btn) => {
+      btn.addEventListener('click', () => duplicateEvent(btn.getAttribute('data-duplicate')));
+    });
     $app.querySelectorAll('[data-delete-event]').forEach((btn) => {
       btn.addEventListener('click', () => deleteEvent(btn.getAttribute('data-delete-event'), btn.getAttribute('data-slug')));
     });
@@ -309,6 +320,54 @@
       state.events = state.events.filter((e) => e.id !== id);
       renderEvents();
     } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function duplicateEvent(id) {
+    try {
+      const created = await api('/events/' + id + '/duplicate', { method: 'POST' });
+      toast('Copied as a draft — edit before going live');
+      go('/admin/events/' + created.event.id);
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  function qrImageUrl(text) {
+    return 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=' + encodeURIComponent(text);
+  }
+
+  function showQrModal(url, title) {
+    $modal.innerHTML = `
+      <div class="modal-backdrop" data-close-modal>
+        <div class="modal qr-modal" role="dialog" aria-label="QR code">
+          <h2>${esc(title)}</h2>
+          <p class="hint">Guests scan this to open the event. Print it for the night.</p>
+          <img class="qr-img" src="${esc(qrImageUrl(url))}" alt="QR code for ${esc(url)}" width="240" height="240" />
+          <p class="qr-url"><code>${esc(url)}</code></p>
+          <div class="row" style="justify-content:center;gap:8px;margin-top:14px">
+            <button class="btn btn-primary" type="button" id="qr-print">Print</button>
+            <button class="btn btn-ghost" type="button" id="qr-copy">Copy link</button>
+            <button class="btn btn-ghost" type="button" data-close-modal>Close</button>
+          </div>
+        </div>
+      </div>`;
+    $modal.querySelectorAll('[data-close-modal]').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        if (e.target === el) $modal.innerHTML = '';
+      });
+    });
+    document.getElementById('qr-copy')?.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(url); toast('Copied guest link'); }
+      catch { toast(url); }
+    });
+    document.getElementById('qr-print')?.addEventListener('click', () => {
+      const w = window.open('', '_blank', 'width=420,height=560');
+      if (!w) { toast('Allow pop-ups to print', 'err'); return; }
+      w.document.write(`<!DOCTYPE html><html><head><title>${esc(title)} QR</title>
+        <style>body{font-family:Segoe UI,sans-serif;text-align:center;padding:32px} img{width:280px;height:280px} code{font-size:13px}</style>
+        </head><body><h1>${esc(title)}</h1><img src="${esc(qrImageUrl(url))}" alt="QR"><p><code>${esc(url)}</code></p></body></html>`);
+      w.document.close();
+      w.focus();
+      setTimeout(() => w.print(), 400);
+    });
   }
 
   // ── Editor ─────────────────────────────────────────────────────────
@@ -617,6 +676,84 @@
       </article>`;
   }
 
+  function scoresPanel(data) {
+    if (!data) return '<p class="meta">Loading scores…</p>';
+    const rows = data.scores || [];
+    const table = rows.length ? `
+      <div class="table-wrap">
+        <table class="scores-table">
+          <thead><tr><th>#</th><th>Name</th><th>Score</th><th>%</th><th>When</th></tr></thead>
+          <tbody>
+            ${rows.map((s, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td>${esc(s.name)}</td>
+                <td>${s.score} / ${s.totalQuestions}</td>
+                <td>${s.percent}%</td>
+                <td class="meta">${esc(formatScoreDate(s.createdAt))}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>` : '<p class="empty">No scores yet. Play the public quiz to populate the Hall of Fame.</p>';
+
+    return `
+      <div class="row" style="justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <p class="hint" style="margin:0">${data.count || 0} player${(data.count || 0) === 1 ? '' : 's'}</p>
+        <div class="row" style="gap:8px">
+          <button class="btn btn-ghost btn-sm" type="button" id="scores-csv" ${rows.length ? '' : 'disabled'}>Download CSV</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="scores-reset" ${rows.length ? '' : 'disabled'}>Reset scores</button>
+        </div>
+      </div>
+      ${table}`;
+  }
+
+  function formatScoreDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z');
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString('en-AU');
+  }
+
+  async function loadScores() {
+    try {
+      const data = await api('/events/' + state.eventId + '/scores');
+      if (state.detail) {
+        state.detail.scores = data;
+        if (state.detail.event) state.detail.event.scoreCount = data.count;
+      }
+    } catch (err) {
+      toast(err.message, 'err');
+      if (state.detail) state.detail.scores = { count: 0, scores: [] };
+    }
+  }
+
+  function downloadScoresCsv() {
+    const rows = (state.detail && state.detail.scores && state.detail.scores.scores) || [];
+    const slug = (state.detail && state.detail.event && state.detail.event.slug) || 'event';
+    const lines = ['Name,Score,Total,Percent,Submitted'];
+    for (const s of rows) {
+      const name = String(s.name || '').replace(/"/g, '""');
+      lines.push(`"${name}",${s.score},${s.totalQuestions},${s.percent}%,${s.createdAt || ''}`);
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = slug + '-scores.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  async function resetScores() {
+    const count = (state.detail && state.detail.scores && state.detail.scores.count) || 0;
+    if (!confirm(`Permanently delete all ${count} score${count === 1 ? '' : 's'} for this event?`)) return;
+    try {
+      await api('/events/' + state.eventId + '/scores', { method: 'DELETE' });
+      toast('Scores reset');
+      await loadScores();
+      renderEditor();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
   function renderEditor() {
     const isNew = state.eventId === 'new';
     const detail = state.detail || { event: { status: 'draft', enableQuiz: true, enableLeaderboard: true, enableGallery: true, enableMusic: true, occasionType: 'Birthday', themePreset: 'birthday', theme: DEFAULT_THEME }, quiz: null, questions: [] };
@@ -626,11 +763,13 @@
         <button class="tab ${state.tab === 'event' ? 'active' : ''}" data-tab="event">Event</button>
         <button class="tab ${state.tab === 'quiz' ? 'active' : ''}" data-tab="quiz">Quiz &amp; e-card</button>
         <button class="tab ${state.tab === 'questions' ? 'active' : ''}" data-tab="questions">Questions (${(detail.questions || []).length})</button>
+        <button class="tab ${state.tab === 'scores' ? 'active' : ''}" data-tab="scores">Scores (${ev.scoreCount || (detail.scores && detail.scores.count) || 0})</button>
       </div>`;
 
     let body = '';
     if (isNew || state.tab === 'event') body = eventFields(ev, isNew);
     else if (state.tab === 'quiz') body = quizFields(detail.quiz);
+    else if (state.tab === 'scores') body = scoresPanel(detail.scores);
     else {
       const qs = detail.questions || [];
       body = `
@@ -650,7 +789,11 @@
               <h1>${isNew ? 'New event' : esc(ev.name || 'Event')}</h1>
               ${isNew ? '<p class="sub">Pick the occasion and which guest features to include, then save.</p>' : `<p class="sub"><a href="/e/${esc(ev.slug || '')}" target="_blank" rel="noopener">/e/${esc(ev.slug || '')}</a></p>`}
             </div>
-            ${!isNew && ev.slug ? `<a class="btn btn-ghost" href="/e/${esc(ev.slug)}" target="_blank" rel="noopener">Open public quiz</a>` : ''}
+            ${!isNew && ev.slug ? `<div class="row" style="gap:8px;flex-wrap:wrap">
+              <a class="btn btn-ghost" href="/e/${esc(ev.slug)}" target="_blank" rel="noopener">Open public quiz</a>
+              <button class="btn btn-ghost" type="button" id="editor-qr">QR code</button>
+              <button class="btn btn-ghost" type="button" id="editor-dup">Duplicate</button>
+            </div>` : ''}
           </div>
           ${tabs}
           ${body}
@@ -662,7 +805,11 @@
 
   function bindEditor(isNew) {
     $app.querySelectorAll('[data-tab]').forEach((btn) => {
-      btn.addEventListener('click', () => { state.tab = btn.getAttribute('data-tab'); renderEditor(); });
+      btn.addEventListener('click', async () => {
+        state.tab = btn.getAttribute('data-tab');
+        if (state.tab === 'scores' && !(state.detail && state.detail.scores)) await loadScores();
+        renderEditor();
+      });
     });
     const slugSource = $app.querySelector('[data-slug-source]');
     if (slugSource) {
@@ -699,6 +846,17 @@
       bindTiers();
     });
     bindTiers();
+
+    document.getElementById('editor-qr')?.addEventListener('click', () => {
+      const ev = state.detail && state.detail.event;
+      if (!ev || !ev.slug) return;
+      showQrModal(location.origin + '/e/' + ev.slug, ev.name || 'Event');
+    });
+    document.getElementById('editor-dup')?.addEventListener('click', () => {
+      if (state.eventId) duplicateEvent(state.eventId);
+    });
+    document.getElementById('scores-csv')?.addEventListener('click', downloadScoresCsv);
+    document.getElementById('scores-reset')?.addEventListener('click', resetScores);
 
     $app.querySelectorAll('[data-pick]').forEach((btn) => {
       btn.addEventListener('click', () => openPicker(btn.getAttribute('data-pick'), (url) => {

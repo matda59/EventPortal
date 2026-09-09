@@ -165,9 +165,24 @@ function readStatus(value, fallback) {
 function readTheme(value) {
   if (value == null || value === '') return {};
   if (typeof value !== 'object' || Array.isArray(value)) return {};
+  const aliases = {
+    primaryRed: 'primaryRed',
+    accentOrange: 'accentOrange',
+    highlightPink: 'highlightPink',
+    bgEarth: 'bgEarth',
+    surfaceCard: 'surfaceCard',
+    textDark: 'textDark',
+    '--primary-red': 'primaryRed',
+    '--accent-orange': 'accentOrange',
+    '--highlight-pink': 'highlightPink',
+    '--bg-earth': 'bgEarth',
+    '--surface-card': 'surfaceCard',
+    '--text-dark': 'textDark',
+  };
   const out = {};
-  for (const key of ['primaryRed', 'accentOrange', 'highlightPink', 'bgEarth', 'surfaceCard', 'textDark']) {
-    if (typeof value[key] === 'string' && value[key].trim()) out[key] = value[key].trim();
+  for (const [key, raw] of Object.entries(value)) {
+    const dest = aliases[key];
+    if (dest && typeof raw === 'string' && raw.trim()) out[dest] = raw.trim();
   }
   return out;
 }
@@ -460,6 +475,112 @@ router.delete('/events/:id', (req, res) => {
   if (!event) return res.status(404).json({ error: 'Event not found.' });
   db.prepare('DELETE FROM events WHERE id = ?').run(event.id);
   res.json({ ok: true });
+});
+
+function uniqueCopySlug(base) {
+  let slug = `${base}-copy`;
+  let n = 2;
+  while (db.prepare('SELECT id FROM events WHERE slug = ?').get(slug)) {
+    slug = `${base}-copy-${n++}`;
+  }
+  return slug;
+}
+
+router.post('/events/:id/duplicate', (req, res) => {
+  const event = eventById(req.params.id);
+  if (!event) return res.status(404).json({ error: 'Event not found.' });
+
+  const quiz = quizByEvent(event.id);
+  const questions = quiz
+    ? db.prepare('SELECT * FROM quiz_questions WHERE quiz_id = ? ORDER BY sort_order').all(quiz.id)
+    : [];
+
+  const newId = uid();
+  const slug  = uniqueCopySlug(event.slug);
+  const name  = / \(copy(?: \d+)?\)$/.test(event.name) ? `${event.name.replace(/ \(copy(?: \d+)?\)$/, '')} (copy)` : `${event.name} (copy)`;
+
+  const tx = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO events
+        (id, slug, name, occasion_type, event_date, status, theme_preset, theme_json,
+         header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music)
+      VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      newId, slug, name,
+      event.occasion_type, event.event_date,
+      event.theme_preset, event.theme_json, event.header_emoji,
+      event.enable_quiz ? 1 : 0,
+      event.enable_leaderboard ? 1 : 0,
+      event.enable_gallery == null ? 1 : (event.enable_gallery ? 1 : 0),
+      event.enable_music == null ? 1 : (event.enable_music ? 1 : 0),
+    );
+
+    const qid = uid();
+    if (quiz) {
+      db.prepare(`
+        INSERT INTO quizzes
+          (id, event_id, title, subtitle, honoree, welcome_message, hero_image,
+           audio_json, score_tiers_json, ecard_json, theme_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        qid, newId, quiz.title, quiz.subtitle, quiz.honoree, quiz.welcome_message, quiz.hero_image,
+        quiz.audio_json, quiz.score_tiers_json, quiz.ecard_json, quiz.theme_json,
+      );
+      const ins = db.prepare(`
+        INSERT INTO quiz_questions
+          (id, quiz_id, sort_order, submitted_by, question_type, question, image_url,
+           options_json, correct_index, fun_fact, audio_clip)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const q of questions) {
+        ins.run(
+          uid(), qid, q.sort_order, q.submitted_by, q.question_type, q.question, q.image_url,
+          q.options_json, q.correct_index, q.fun_fact, q.audio_clip,
+        );
+      }
+    } else {
+      ensureQuiz(newId, name);
+    }
+  });
+  tx();
+
+  const created = eventById(newId);
+  const createdQuiz = quizByEvent(newId);
+  const createdQs = createdQuiz
+    ? db.prepare('SELECT * FROM quiz_questions WHERE quiz_id = ? ORDER BY sort_order').all(createdQuiz.id)
+    : [];
+  res.status(201).json({
+    event: serializeEvent(created, { questionCount: createdQs.length, scoreCount: 0 }),
+    quiz: serializeQuiz(createdQuiz),
+    questions: createdQs.map(serializeQuestion),
+  });
+});
+
+router.get('/events/:id/scores', (req, res) => {
+  const event = eventById(req.params.id);
+  if (!event) return res.status(404).json({ error: 'Event not found.' });
+  const rows = db.prepare(`
+    SELECT id, player_name, score, total_questions, created_at
+    FROM score_submissions WHERE event_id = ? ORDER BY score DESC, created_at ASC
+  `).all(event.id);
+  res.json({
+    count: rows.length,
+    scores: rows.map((s) => ({
+      id: s.id,
+      name: s.player_name,
+      score: s.score,
+      totalQuestions: s.total_questions,
+      percent: s.total_questions ? Math.round((s.score / s.total_questions) * 100) : 0,
+      createdAt: s.created_at,
+    })),
+  });
+});
+
+router.delete('/events/:id/scores', (req, res) => {
+  const event = eventById(req.params.id);
+  if (!event) return res.status(404).json({ error: 'Event not found.' });
+  const info = db.prepare('DELETE FROM score_submissions WHERE event_id = ?').run(event.id);
+  res.json({ deleted: info.changes });
 });
 
 // ── Quiz copy ────────────────────────────────────────────────────────────────

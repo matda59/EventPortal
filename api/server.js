@@ -37,6 +37,28 @@ function parseJson(str, fallback) {
   try { return JSON.parse(str); } catch { return fallback; }
 }
 
+const THEME_PAIRS = [
+  ['primaryRed', '--primary-red'],
+  ['accentOrange', '--accent-orange'],
+  ['highlightPink', '--highlight-pink'],
+  ['bgEarth', '--bg-earth'],
+  ['surfaceCard', '--surface-card'],
+  ['textDark', '--text-dark'],
+];
+
+function normalizeTheme(raw) {
+  const theme = (raw && typeof raw === 'object') ? raw : {};
+  const out = {};
+  for (const [camel, css] of THEME_PAIRS) {
+    const val = theme[camel] || theme[css];
+    if (val) {
+      out[camel] = val;
+      out[css] = val;
+    }
+  }
+  return out;
+}
+
 function findEventBySlug(slug) {
   return db.prepare('SELECT * FROM events WHERE slug = ?').get(slug);
 }
@@ -219,7 +241,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
           heroImage:      quiz?.hero_image     ?? null,
           occasionType:   event.occasion_type  || null,
           headerEmoji:    event.header_emoji   || null,
-          theme:          parseJson(event.theme_json || quiz?.theme_json, {}),
+          theme:          normalizeTheme(parseJson(event.theme_json || quiz?.theme_json, {})),
         },
         ecard:      {},
         audio:      {},
@@ -246,7 +268,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
         heroImage:      quiz?.hero_image     ?? null,
         occasionType:   event.occasion_type  || null,
         headerEmoji:    event.header_emoji   || null,
-        theme:          parseJson(event.theme_json || quiz?.theme_json, {}),
+        theme:          normalizeTheme(parseJson(event.theme_json || quiz?.theme_json, {})),
       },
       ecard:      parseJson(quiz?.ecard_json, {}),
       audio:      parseJson(quiz?.audio_json, {}),

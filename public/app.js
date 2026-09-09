@@ -89,15 +89,22 @@
   }
 
   function applyTheme(theme) {
-    if (!theme) return;
+    if (!theme || typeof theme !== 'object') return;
     const root = document.documentElement.style;
-    if (theme.primaryRed)    root.setProperty('--primary-red',    theme.primaryRed);
-    if (theme.accentOrange)  root.setProperty('--accent-orange',  theme.accentOrange);
-    if (theme.highlightPink) root.setProperty('--highlight-pink', theme.highlightPink);
-    if (theme.bgEarth)       root.setProperty('--bg-earth',       theme.bgEarth);
-    if (theme.surfaceCard)   root.setProperty('--surface-card',   theme.surfaceCard);
-    if (theme.textDark)      root.setProperty('--text-dark',      theme.textDark);
-    const color = theme.primaryRed || theme.accentOrange;
+    const map = {
+      primaryRed: '--primary-red',
+      accentOrange: '--accent-orange',
+      highlightPink: '--highlight-pink',
+      bgEarth: '--bg-earth',
+      surfaceCard: '--surface-card',
+      textDark: '--text-dark',
+    };
+    for (const [key, value] of Object.entries(theme)) {
+      if (value == null || value === '') continue;
+      const prop = map[key] || (String(key).startsWith('--') ? key : null);
+      if (prop) root.setProperty(prop, value);
+    }
+    const color = theme.primaryRed || theme['--primary-red'] || theme.accentOrange || theme['--accent-orange'];
     if (color) {
       let meta = document.querySelector('meta[name="theme-color"]');
       if (!meta) {
