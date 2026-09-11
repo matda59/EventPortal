@@ -41,6 +41,24 @@
       </div>
     </section>
 
+    <!-- Guest book -->
+    <section id="screen-guestbook" class="screen card">
+      <h1 class="title" id="guestbook-title">Guest book</h1>
+      <p class="lead" id="guestbook-lead">Leave a short note for the hosts.</p>
+      <form id="guestbook-form" class="name-form" novalidate>
+        <label for="guestbook-name" class="field-label">Your name</label>
+        <input id="guestbook-name" class="text-input" type="text" maxlength="30"
+               placeholder="Enter your name…" autocomplete="name" />
+        <label for="guestbook-message" class="field-label" style="margin-top:14px">Your message</label>
+        <textarea id="guestbook-message" class="text-input guestbook-message" maxlength="280"
+                  placeholder="Write a short message…" rows="3"></textarea>
+        <p id="guestbook-error" class="error-text" role="alert" hidden></p>
+        <button type="submit" class="btn btn-primary btn-block">Sign the guest book</button>
+      </form>
+      <div id="guestbook-list" class="guestbook-list"></div>
+      <button id="guestbook-continue" class="btn btn-secondary btn-block" type="button">Continue →</button>
+    </section>
+
     <!-- SCREEN 1: Welcome / Name Entry -->
     <section id="screen-welcome" class="screen card active">
       <img id="welcome-hero" class="hero-image" alt="" hidden />

@@ -15,6 +15,7 @@
   const SCORES_URL   = `/api/events/${EVENT_SLUG}/scores`;
   const SESSIONS_URL = `/api/events/${EVENT_SLUG}/sessions`;
   const MUSIC_URL    = `/api/events/${EVENT_SLUG}/music`;
+  const GUESTBOOK_URL = `/api/events/${EVENT_SLUG}/guestbook`;
 
   // ── App state ──────────────────────────────────────────────────────
   const state = {
@@ -32,10 +33,11 @@
   // ── Element cache ──────────────────────────────────────────────────
   const $ = (id) => document.getElementById(id);
   const screens = {
-    ecard:   $('screen-ecard'),
-    welcome: $('screen-welcome'),
-    quiz:    $('screen-quiz'),
-    results: $('screen-results')
+    ecard:      $('screen-ecard'),
+    guestbook:  $('screen-guestbook'),
+    welcome:    $('screen-welcome'),
+    quiz:       $('screen-quiz'),
+    results:    $('screen-results')
   };
 
   // ── Utilities ──────────────────────────────────────────────────────
@@ -58,6 +60,7 @@
       enableLeaderboard: f.enableLeaderboard !== false,
       enableGallery:     f.enableGallery !== false,
       enableMusic:       f.enableMusic !== false,
+      enableGuestbook:   !!f.enableGuestbook,
       status:            f.status || 'active',
     };
   }
@@ -233,6 +236,8 @@
     if (hasEcard(ecard)) {
       renderEcard(ecard, meta);
       showScreen('ecard');
+    } else if (guestFlags().enableGuestbook) {
+      openGuestbook();
     } else {
       showScreen('welcome');
     }
@@ -246,7 +251,8 @@
     $('ecard-sub').textContent      = ecard.subGreeting || '';
     $('ecard-message').textContent  = ecard.message    || meta.welcomeMessage || '';
     $('ecard-start').textContent    = ecard.buttonText
-      || (guestFlags().enableQuiz ? 'Start the Quiz →' : 'Continue →');
+      || (guestFlags().enableGuestbook ? 'Sign the guest book →'
+        : (guestFlags().enableQuiz ? 'Start the Quiz →' : 'Continue →'));
     const label = $('mp3-label');
     if (label) label.textContent = copy.music;
     buildPhotoBoard(guestFlags().enableGallery && Array.isArray(ecard.photos) ? ecard.photos : []);
@@ -272,9 +278,12 @@
   // ── Welcome / name entry ───────────────────────────────────────────
   function wireEvents() {
     $('ecard-start').addEventListener('click', () => {
-      showScreen('welcome');
-      if (guestFlags().enableQuiz) setTimeout(() => $('player-name').focus(), 300);
+      if (guestFlags().enableGuestbook) openGuestbook();
+      else goAfterIntro();
     });
+
+    $('guestbook-form')?.addEventListener('submit', onGuestbookSubmit);
+    $('guestbook-continue')?.addEventListener('click', goAfterIntro);
 
     $('name-form').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -296,6 +305,84 @@
 
     $('next-btn').addEventListener('click', onNext);
     $('play-again-btn').addEventListener('click', resetAndRestart);
+  }
+
+  function goAfterIntro() {
+    showScreen('welcome');
+    if (state.guestbookName && $('player-name') && !$('player-name').value) {
+      $('player-name').value = state.guestbookName;
+    }
+    if (guestFlags().enableQuiz) setTimeout(() => $('player-name').focus(), 300);
+  }
+
+  function renderGuestbookList(entries) {
+    const list = $('guestbook-list');
+    if (!list) return;
+    if (!entries || !entries.length) {
+      list.innerHTML = '<p class="hof-empty">Be the first to sign.</p>';
+      return;
+    }
+    list.innerHTML = entries.map((e) => `
+      <article class="guestbook-entry">
+        <strong>${escHtml(e.name)}</strong>
+        <p>${escHtml(e.message)}</p>
+      </article>`).join('');
+  }
+
+  async function openGuestbook() {
+    const meta = (state.config && state.config.meta) || {};
+    const honoree = meta.honoree || '';
+    $('guestbook-title').textContent = 'Guest book';
+    $('guestbook-lead').textContent = honoree
+      ? `Leave a short note for ${honoree}.`
+      : 'Leave a short note for the hosts.';
+    $('guestbook-continue').textContent = guestFlags().enableQuiz ? 'Continue to the quiz →' : 'Done';
+    if (state.guestbookName) $('guestbook-name').value = state.guestbookName;
+    showScreen('guestbook');
+    try {
+      const data = await apiJson(GUESTBOOK_URL);
+      renderGuestbookList(data.entries);
+    } catch (err) {
+      renderGuestbookList([]);
+      const errEl = $('guestbook-error');
+      if (errEl) {
+        errEl.textContent = err.message || 'Could not load the guest book.';
+        errEl.hidden = false;
+      }
+    }
+  }
+
+  async function onGuestbookSubmit(e) {
+    e.preventDefault();
+    const errEl = $('guestbook-error');
+    errEl.hidden = true;
+    const name = $('guestbook-name').value.trim();
+    const message = $('guestbook-message').value.trim();
+    if (!name) {
+      errEl.textContent = 'Please enter your name.';
+      errEl.hidden = false;
+      $('guestbook-name').focus();
+      return;
+    }
+    if (!message) {
+      errEl.textContent = 'Please write a short message.';
+      errEl.hidden = false;
+      $('guestbook-message').focus();
+      return;
+    }
+    try {
+      const data = await apiJson(GUESTBOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, message }),
+      });
+      state.guestbookName = name;
+      $('guestbook-message').value = '';
+      renderGuestbookList(data.entries);
+    } catch (err) {
+      errEl.textContent = err.message || 'Could not save your message.';
+      errEl.hidden = false;
+    }
   }
 
   function showQuizError(msg) {

@@ -131,6 +131,7 @@ function rateLimit({ windowMs, max }) {
 const limitSessions = rateLimit({ windowMs: 10 * 60 * 1000, max: 80 });
 const limitAnswers  = rateLimit({ windowMs: 10 * 60 * 1000, max: 240 });
 const limitScores   = rateLimit({ windowMs: 10 * 60 * 1000, max: 60 });
+const limitGuestbook = rateLimit({ windowMs: 10 * 60 * 1000, max: 30 });
 
 function readPlayerName(value) {
   if (typeof value !== 'string') return null;
@@ -252,6 +253,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
           enableLeaderboard: false,
           enableGallery:     false,
           enableMusic:       false,
+          enableGuestbook:   false,
           status:            'ended',
         },
       });
@@ -288,6 +290,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
         enableLeaderboard: !!event.enable_leaderboard,
         enableGallery:     event.enable_gallery == null ? true : !!event.enable_gallery,
         enableMusic:       event.enable_music == null ? true : !!event.enable_music,
+        enableGuestbook:   !!event.enable_guestbook,
         status:            'active',
       },
     });
@@ -459,6 +462,63 @@ app.get('/api/events/:slug/music', async (req, res) => {
   } catch (err) {
     console.error('GET music:', err);
     res.json([]);
+  }
+});
+
+const GUESTBOOK_MAX = 200;
+const GUESTBOOK_MSG_MAX = 280;
+
+function serializeGuestbook(rows) {
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.guest_name,
+    message: r.message,
+    createdAt: r.created_at,
+  }));
+}
+
+app.get('/api/events/:slug/guestbook', (req, res) => {
+  try {
+    const event = findActiveEvent(req.params.slug);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    if (!event.enable_guestbook) return res.status(403).json({ error: 'Guest book is not enabled.' });
+    const rows = db.prepare(`
+      SELECT id, guest_name, message, created_at
+      FROM guestbook_entries WHERE event_id = ?
+      ORDER BY created_at DESC LIMIT ?
+    `).all(event.id, GUESTBOOK_MAX);
+    res.json({ entries: serializeGuestbook(rows) });
+  } catch (err) {
+    console.error('GET guestbook:', err);
+    res.status(500).json({ error: 'Unable to read guest book.' });
+  }
+});
+
+app.post('/api/events/:slug/guestbook', limitGuestbook, (req, res) => {
+  try {
+    const event = findActiveEvent(req.params.slug);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    if (!event.enable_guestbook) return res.status(403).json({ error: 'Guest book is not enabled.' });
+
+    const name = readPlayerName(req.body?.name);
+    if (!name) return res.status(400).json({ error: 'Please enter your name.' });
+    const message = typeof req.body?.message === 'string' ? req.body.message.trim().slice(0, GUESTBOOK_MSG_MAX) : '';
+    if (!message) return res.status(400).json({ error: 'Please write a short message.' });
+
+    db.prepare(`
+      INSERT INTO guestbook_entries (id, event_id, guest_name, message)
+      VALUES (?, ?, ?, ?)
+    `).run(uid(), event.id, name, message);
+
+    const rows = db.prepare(`
+      SELECT id, guest_name, message, created_at
+      FROM guestbook_entries WHERE event_id = ?
+      ORDER BY created_at DESC LIMIT ?
+    `).all(event.id, GUESTBOOK_MAX);
+    res.status(201).json({ entries: serializeGuestbook(rows) });
+  } catch (err) {
+    console.error('POST guestbook:', err);
+    res.status(500).json({ error: 'Unable to save guest book entry.' });
   }
 });
 

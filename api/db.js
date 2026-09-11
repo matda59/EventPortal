@@ -27,6 +27,7 @@ db.exec(`
     enable_leaderboard INTEGER NOT NULL DEFAULT 0,
     enable_gallery     INTEGER NOT NULL DEFAULT 1,
     enable_music       INTEGER NOT NULL DEFAULT 1,
+    enable_guestbook   INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -92,6 +93,18 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sessions_event
     ON quiz_sessions(event_id, created_at);
 
+  CREATE TABLE IF NOT EXISTS guestbook_entries (
+    id         TEXT PRIMARY KEY,
+    event_id   TEXT NOT NULL,
+    guest_name TEXT NOT NULL,
+    message    TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_guestbook_event
+    ON guestbook_entries(event_id, created_at);
+
   CREATE TABLE IF NOT EXISTS quiz_answers (
     session_id     TEXT NOT NULL,
     question_id    TEXT NOT NULL,
@@ -117,5 +130,6 @@ function addColumnIfMissing(table, name, ddl) {
 }
 addColumnIfMissing('events', 'enable_gallery', 'enable_gallery INTEGER NOT NULL DEFAULT 1');
 addColumnIfMissing('events', 'enable_music', 'enable_music INTEGER NOT NULL DEFAULT 1');
+addColumnIfMissing('events', 'enable_guestbook', 'enable_guestbook INTEGER NOT NULL DEFAULT 0');
 
 module.exports = db;

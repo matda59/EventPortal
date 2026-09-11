@@ -104,6 +104,7 @@
     enableLeaderboard: true,
     enableGallery: true,
     enableMusic: true,
+    enableGuestbook: true,
     occasionType: 'Birthday',
     themePreset: 'pink',
     theme: DEFAULT_THEME,
@@ -116,6 +117,13 @@
     { value: 'Retirement' },
     { value: 'Kids party' },
     { value: 'Holiday' },
+  ];
+
+  const HEADER_EMOJIS = [
+    '🎉', '🥳', '🎈', '🎂', '🎁', '🥂', '🍾',
+    '💍', '💐', '💕', '💖', '🌹', '💒',
+    '🌅', '🎄', '❄️', '🦄', '⭐', '✨',
+    '🎓', '👶', '🏠', '⛳', '🎵', '📸', '👑',
   ];
 
   const THEME_FIELDS = [
@@ -161,6 +169,33 @@
     $toast.className = 'toast show' + (kind === 'err' ? ' err' : '');
     clearTimeout(toast._t);
     toast._t = setTimeout(() => { $toast.className = 'toast'; }, 2800);
+  }
+
+  function introPreviewHtml(ecard, opts) {
+    const mini = opts && opts.mini;
+    const photos = Array.from({ length: 6 }, (_, i) => (ecard && ecard.photos && ecard.photos[i]) || { src: '', caption: '' });
+    const greeting = (ecard && ecard.greeting) || 'Happy Birthday!';
+    const sub = (ecard && ecard.subGreeting) || 'A short tagline';
+    const msg = (ecard && ecard.message) || 'Your welcome note appears here.';
+    const btn = (ecard && ecard.buttonText) || 'Start the Quiz →';
+    const polaroids = photos.map((p, i) => `
+      <figure class="intro-polaroid intro-pos-${i + 1}" data-preview-photo="${i}">
+        <div class="intro-polaroid-photo">${p.src ? `<img src="${esc(p.src)}" alt="">` : ''}</div>
+        <figcaption>${esc(p.caption || 'Photo ' + (i + 1))}</figcaption>
+      </figure>`).join('');
+    return `
+      <div class="intro-preview ${mini ? 'intro-preview-mini' : ''}" aria-hidden="true">
+        <div class="intro-preview-stage">
+          ${polaroids}
+          <div class="intro-preview-card">
+            <div class="intro-preview-confetti">✨🎉✨</div>
+            <div class="intro-preview-headline" id="preview-greeting">${esc(greeting)}</div>
+            <div class="intro-preview-tag" id="preview-sub">${esc(sub)}</div>
+            <div class="intro-preview-note" id="preview-msg">${esc(msg)}</div>
+            <div class="intro-preview-btn" id="preview-btn">${esc(btn)}</div>
+          </div>
+        </div>
+      </div>`;
   }
 
   async function api(path, opts) {
@@ -301,9 +336,10 @@
         </p>
         <p class="meta" style="margin-top:8px">
           ${ev.enableQuiz ? 'Quiz on' : 'Quiz off'}
-          · ${ev.enableGallery !== false ? 'Gallery on' : 'Gallery off'}
+          · ${ev.enableGallery !== false ? 'Photos on' : 'Photos off'}
           · ${ev.enableMusic !== false ? 'Music on' : 'Music off'}
           · ${ev.enableLeaderboard ? 'Hall of Fame on' : 'Hall of Fame off'}
+          · ${ev.enableGuestbook ? 'Guest book on' : 'Guest book off'}
           · ${ev.questionCount || 0} question${ev.questionCount === 1 ? '' : 's'}
           · ${ev.scoreCount || 0} score${ev.scoreCount === 1 ? '' : 's'}
         </p>
@@ -474,14 +510,19 @@
               `<option value="${s}" ${ev.status === s ? 'selected' : ''}>${s}</option>`).join('')}
           </select>
         </div>
-        <div class="field">
-          <label for="ev-emoji">Header emoji</label>
-          <input id="ev-emoji" value="${esc(ev.headerEmoji || '🎉')}" maxlength="8" />
+        <div class="field span-2">
+          <label>Header emoji</label>
+          <p class="hint">Shown next to the event name. Tap one below — you do not type it.</p>
+          <input type="hidden" id="ev-emoji" value="${esc(ev.headerEmoji || '🎉')}" />
+          <div class="emoji-grid" id="emoji-grid" role="listbox" aria-label="Header emoji">
+            ${HEADER_EMOJIS.map((em) =>
+              `<button type="button" class="emoji-pick ${(ev.headerEmoji || '🎉') === em ? 'selected' : ''}" data-emoji="${esc(em)}" aria-pressed="${(ev.headerEmoji || '🎉') === em ? 'true' : 'false'}">${em}</button>`).join('')}
+          </div>
         </div>
         <p class="hint span-2">draft is hidden from guests. active is live at /e/slug. ended shows “this event has ended”.</p>
         <div class="span-2">
           <h2 class="section-title">Guest features</h2>
-          <p class="hint">Turn on what this event should include. After you create it, add photos, tracks, and questions on the next tabs.</p>
+          <p class="hint">Turn on what this event should include. After you create it, write the opening welcome card, add photos, and add questions on the next tabs.</p>
           <div class="feature-grid">
             <label class="feature-card">
               <input type="checkbox" id="ev-quiz" ${ev.enableQuiz !== false ? 'checked' : ''} />
@@ -493,8 +534,8 @@
             <label class="feature-card">
               <input type="checkbox" id="ev-gallery" ${ev.enableGallery !== false ? 'checked' : ''} />
               <span>
-                <strong>Photo gallery</strong>
-                <small>Polaroids on the intro e-card</small>
+                <strong>Photo wall</strong>
+                <small>Up to six Polaroids around the opening welcome card</small>
               </span>
             </label>
             <label class="feature-card">
@@ -511,7 +552,16 @@
                 <small>Public leaderboard after the quiz</small>
               </span>
             </label>
+            <label class="feature-card">
+              <input type="checkbox" id="ev-guestbook" ${ev.enableGuestbook ? 'checked' : ''} />
+              <span>
+                <strong>Guest book</strong>
+                <small>Guests sign their name and leave a message</small>
+              </span>
+            </label>
           </div>
+          ${introPreviewHtml(null, { mini: true })}
+          <p class="hint">Guests see this first: a welcome card in the middle, with Polaroid photos around it. After you save, write the headline and pick the six photos on the Intro tab.</p>
         </div>
         <div class="span-2">
           <h2 class="section-title">Colour theme</h2>
@@ -619,27 +669,28 @@
       <p class="hint">Tick the tracks that should appear in this event’s public player. Shown to guests when Music player is on. Background music is included automatically.</p>
       ${playlistPicker(audio.playlist)}
 
-      <h2 class="section-title" style="margin-top:28px">E-card</h2>
-      <p class="hint">Leave greeting, message, and photos blank to skip the intro. Polaroids show when Photo gallery is on.</p>
+      <h2 class="section-title" style="margin-top:28px">Opening welcome screen</h2>
+      <p class="hint">This is the first screen guests see: a welcome card in the middle, with up to six Polaroid photos floating around it. The sketch below updates as you type.</p>
+      ${introPreviewHtml(ecard)}
       <div class="form-grid">
         <div class="field">
-          <label for="ecard-greeting">Greeting</label>
-          <input id="ecard-greeting" value="${esc(ecard.greeting || '')}" />
+          <label for="ecard-greeting">Headline</label>
+          <input id="ecard-greeting" value="${esc(ecard.greeting || '')}" placeholder="Happy Birthday, Naomi!" />
         </div>
         <div class="field">
-          <label for="ecard-sub">Sub-greeting</label>
-          <input id="ecard-sub" value="${esc(ecard.subGreeting || '')}" />
+          <label for="ecard-sub">Tagline</label>
+          <input id="ecard-sub" value="${esc(ecard.subGreeting || '')}" placeholder="Four fabulous decades" />
         </div>
         <div class="field span-2">
-          <label for="ecard-message">Message</label>
-          <textarea id="ecard-message">${esc(ecard.message || '')}</textarea>
+          <label for="ecard-message">Welcome note</label>
+          <textarea id="ecard-message" placeholder="A short message guests read before the quiz or guest book.">${esc(ecard.message || '')}</textarea>
         </div>
         <div class="field span-2">
-          <label for="ecard-btn">Button text</label>
-          <input id="ecard-btn" value="${esc(ecard.buttonText || '')}" />
+          <label for="ecard-btn">Button on the card</label>
+          <input id="ecard-btn" value="${esc(ecard.buttonText || '')}" placeholder="Start the Quiz →" />
         </div>
       </div>
-      <p class="hint" style="margin-top:12px">Up to six polaroid photos on the intro screen.</p>
+      <p class="hint" style="margin-top:12px">Add up to six Polaroid photos. They appear around the welcome card — not in a row on this form. Browse from the media library.</p>
       <div class="grid" id="ecard-photos">
         ${photos.map((p, i) => `
           <div class="card">
@@ -775,6 +826,28 @@
       ${table}`;
   }
 
+  function guestbookPanel(data) {
+    if (!data) return '<p class="meta">Loading guest book…</p>';
+    const rows = data.entries || [];
+    const list = rows.length ? `
+      <div class="gb-admin-list">
+        ${rows.map((e) => `
+          <article class="card">
+            <div class="row" style="justify-content:space-between;align-items:flex-start">
+              <div>
+                <strong>${esc(e.name)}</strong>
+                <p class="meta">${esc(formatScoreDate(e.createdAt))}</p>
+                <p style="margin-top:8px">${esc(e.message)}</p>
+              </div>
+              <button class="btn btn-ghost btn-sm" type="button" data-del-gb="${esc(e.id)}">Delete</button>
+            </div>
+          </article>`).join('')}
+      </div>` : '<p class="empty">No messages yet. Guests sign when Guest book is turned on.</p>';
+    return `
+      <p class="hint">Messages guests left on the public page. Delete anything you do not want shown.</p>
+      ${list}`;
+  }
+
   function formatScoreDate(iso) {
     if (!iso) return '';
     const d = new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z');
@@ -792,6 +865,19 @@
     } catch (err) {
       toast(err.message, 'err');
       if (state.detail) state.detail.scores = { count: 0, scores: [] };
+    }
+  }
+
+  async function loadGuestbook() {
+    try {
+      const data = await api('/events/' + state.eventId + '/guestbook');
+      if (state.detail) {
+        state.detail.guestbook = data;
+        if (state.detail.event) state.detail.event.guestbookCount = data.count;
+      }
+    } catch (err) {
+      toast(err.message, 'err');
+      if (state.detail) state.detail.guestbook = { count: 0, entries: [] };
     }
   }
 
@@ -829,8 +915,9 @@
     const tabs = isNew ? '' : `
       <div class="tabs">
         <button class="tab ${state.tab === 'event' ? 'active' : ''}" data-tab="event">Event</button>
-        <button class="tab ${state.tab === 'quiz' ? 'active' : ''}" data-tab="quiz">Quiz &amp; e-card</button>
+        <button class="tab ${state.tab === 'quiz' ? 'active' : ''}" data-tab="quiz">Intro &amp; quiz</button>
         <button class="tab ${state.tab === 'questions' ? 'active' : ''}" data-tab="questions">Questions (${(detail.questions || []).length})</button>
+        <button class="tab ${state.tab === 'guestbook' ? 'active' : ''}" data-tab="guestbook">Guest book (${ev.guestbookCount || (detail.guestbook && detail.guestbook.count) || 0})</button>
         <button class="tab ${state.tab === 'scores' ? 'active' : ''}" data-tab="scores">Scores (${ev.scoreCount || (detail.scores && detail.scores.count) || 0})</button>
       </div>`;
 
@@ -838,6 +925,7 @@
     if (isNew || state.tab === 'event') body = eventFields(ev, isNew);
     else if (state.tab === 'quiz') body = quizFields(detail.quiz);
     else if (state.tab === 'scores') body = scoresPanel(detail.scores);
+    else if (state.tab === 'guestbook') body = guestbookPanel(detail.guestbook);
     else {
       const qs = detail.questions || [];
       body = `
@@ -876,6 +964,7 @@
       btn.addEventListener('click', async () => {
         state.tab = btn.getAttribute('data-tab');
         if (state.tab === 'scores' && !(state.detail && state.detail.scores)) await loadScores();
+        if (state.tab === 'guestbook' && !(state.detail && state.detail.guestbook)) await loadGuestbook();
         renderEditor();
       });
     });
@@ -918,6 +1007,19 @@
         applyColorTheme(id);
       });
     });
+    $app.querySelectorAll('[data-emoji]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const em = btn.getAttribute('data-emoji');
+        const hidden = document.getElementById('ev-emoji');
+        if (hidden) hidden.value = em;
+        $app.querySelectorAll('[data-emoji]').forEach((b) => {
+          const on = b.getAttribute('data-emoji') === em;
+          b.classList.toggle('selected', on);
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+      });
+    });
+    bindIntroPreview();
     const saveEv = document.getElementById('save-event');
     if (saveEv) saveEv.addEventListener('click', () => saveEvent(isNew));
     const occasion = document.getElementById('ev-occasion');
@@ -947,6 +1049,17 @@
     });
     document.getElementById('scores-csv')?.addEventListener('click', downloadScoresCsv);
     document.getElementById('scores-reset')?.addEventListener('click', resetScores);
+    $app.querySelectorAll('[data-del-gb]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this guest book message?')) return;
+        try {
+          await api('/events/' + state.eventId + '/guestbook/' + btn.getAttribute('data-del-gb'), { method: 'DELETE' });
+          toast('Message deleted');
+          await loadGuestbook();
+          renderEditor();
+        } catch (err) { toast(err.message, 'err'); }
+      });
+    });
 
     $app.querySelectorAll('[data-pick]').forEach((btn) => {
       btn.addEventListener('click', () => openPicker(btn.getAttribute('data-pick'), (url) => {
@@ -954,6 +1067,7 @@
         if (id) {
           const el = document.getElementById(id);
           if (el) el.value = url;
+          if (id.indexOf('photo-src-') === 0) updatePreviewPhoto(Number(id.slice('photo-src-'.length)));
           return;
         }
         const card = btn.closest('.q-card');
@@ -966,6 +1080,38 @@
     if (addQ) addQ.addEventListener('click', addQuestion);
 
     $app.querySelectorAll('.q-card').forEach((card) => bindQuestionCard(card));
+  }
+
+  function bindIntroPreview() {
+    const pairs = [
+      ['ecard-greeting', 'preview-greeting', 'Happy Birthday!'],
+      ['ecard-sub', 'preview-sub', 'A short tagline'],
+      ['ecard-message', 'preview-msg', 'Your welcome note appears here.'],
+      ['ecard-btn', 'preview-btn', 'Start the Quiz →'],
+    ];
+    pairs.forEach(([src, dest, fallback]) => {
+      const el = document.getElementById(src);
+      const out = document.getElementById(dest);
+      if (!el || !out) return;
+      el.addEventListener('input', () => { out.textContent = el.value.trim() || fallback; });
+    });
+    for (let i = 0; i < 6; i++) {
+      const src = document.getElementById('photo-src-' + i);
+      const cap = document.getElementById('photo-cap-' + i);
+      if (src) src.addEventListener('input', () => updatePreviewPhoto(i));
+      if (cap) cap.addEventListener('input', () => updatePreviewPhoto(i));
+    }
+  }
+
+  function updatePreviewPhoto(i) {
+    const fig = document.querySelector('[data-preview-photo="' + i + '"]');
+    if (!fig) return;
+    const src = val('photo-src-' + i);
+    const cap = val('photo-cap-' + i);
+    const box = fig.querySelector('.intro-polaroid-photo');
+    const capEl = fig.querySelector('figcaption');
+    if (box) box.innerHTML = src ? `<img src="${esc(src)}" alt="">` : '';
+    if (capEl) capEl.textContent = cap || ('Photo ' + (i + 1));
   }
 
   function bindTiers() {
@@ -1053,13 +1199,14 @@
       enableLeaderboard: val('ev-hof'),
       enableGallery: val('ev-gallery'),
       enableMusic: val('ev-music'),
+      enableGuestbook: val('ev-guestbook'),
       themePreset: val('ev-preset') || 'custom',
       theme: readThemeFromForm(),
     };
     try {
       if (isNew) {
         const created = await api('/events', { method: 'POST', body: JSON.stringify(payload) });
-        toast('Event created. Add photos, music, and questions on the next tabs.');
+        toast('Event created. Write the opening welcome card and add photos on the next tab.');
         state.detail = created;
         state.tab = 'quiz';
         go('/admin/events/' + created.event.id);

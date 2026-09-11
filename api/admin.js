@@ -109,6 +109,7 @@ function serializeEvent(row, extras = {}) {
     enableLeaderboard: !!row.enable_leaderboard,
     enableGallery:     row.enable_gallery == null ? true : !!row.enable_gallery,
     enableMusic:       row.enable_music == null ? true : !!row.enable_music,
+    enableGuestbook:   !!row.enable_guestbook,
     createdAt:         row.created_at,
     updatedAt:         row.updated_at,
     ...extras,
@@ -347,13 +348,15 @@ router.get('/events', (_req, res) => {
       (SELECT COUNT(*) FROM quizzes q
          JOIN quiz_questions qq ON qq.quiz_id = q.id
         WHERE q.event_id = e.id) AS question_count,
-      (SELECT COUNT(*) FROM score_submissions s WHERE s.event_id = e.id) AS score_count
+      (SELECT COUNT(*) FROM score_submissions s WHERE s.event_id = e.id) AS score_count,
+      (SELECT COUNT(*) FROM guestbook_entries g WHERE g.event_id = e.id) AS guestbook_count
     FROM events e
     ORDER BY e.updated_at DESC
   `).all();
   res.json(rows.map((row) => serializeEvent(row, {
-    questionCount: row.question_count,
-    scoreCount:    row.score_count,
+    questionCount:   row.question_count,
+    scoreCount:      row.score_count,
+    guestbookCount:  row.guestbook_count,
   })));
 });
 
@@ -379,8 +382,8 @@ router.post('/events', (req, res) => {
     db.prepare(`
       INSERT INTO events
         (id, slug, name, occasion_type, event_date, status, theme_preset, theme_json,
-         header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music, enable_guestbook)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       slugRes.slug,
@@ -390,11 +393,12 @@ router.post('/events', (req, res) => {
       statusRes.status,
       str(body.themePreset, 40, 'custom'),
       themeJ,
-      str(body.headerEmoji, 8, '🎉'),
+      str(body.headerEmoji, 16, '🎉'),
       body.enableQuiz === false ? 0 : 1,
       body.enableLeaderboard === false ? 0 : 1,
       body.enableGallery === false ? 0 : 1,
       body.enableMusic === false ? 0 : 1,
+      body.enableGuestbook === false ? 0 : 1,
     );
     ensureQuiz(id, name);
   });
@@ -415,8 +419,11 @@ router.get('/events/:id', (req, res) => {
   const scoreCount = db.prepare(
     'SELECT COUNT(*) AS n FROM score_submissions WHERE event_id = ?'
   ).get(event.id).n;
+  const guestbookCount = db.prepare(
+    'SELECT COUNT(*) AS n FROM guestbook_entries WHERE event_id = ?'
+  ).get(event.id).n;
   res.json({
-    event:      serializeEvent(event, { scoreCount, questionCount: questions.length }),
+    event:      serializeEvent(event, { scoreCount, questionCount: questions.length, guestbookCount }),
     quiz:       serializeQuiz(quiz),
     questions:  questions.map(serializeQuestion),
   });
@@ -445,7 +452,7 @@ router.put('/events/:id', (req, res) => {
     UPDATE events SET
       slug = ?, name = ?, occasion_type = ?, event_date = ?, status = ?,
       theme_preset = ?, theme_json = ?, header_emoji = ?,
-      enable_quiz = ?, enable_leaderboard = ?, enable_gallery = ?, enable_music = ?,
+      enable_quiz = ?, enable_leaderboard = ?, enable_gallery = ?, enable_music = ?, enable_guestbook = ?,
       updated_at = datetime('now')
     WHERE id = ?
   `).run(
@@ -456,11 +463,12 @@ router.put('/events/:id', (req, res) => {
     statusRes.status,
     str(body.themePreset, 40, event.theme_preset || 'custom'),
       themeJ,
-      str(body.headerEmoji, 8, event.header_emoji || '🎉'),
+      str(body.headerEmoji, 16, event.header_emoji || '🎉'),
       body.enableQuiz === undefined ? event.enable_quiz : (body.enableQuiz ? 1 : 0),
       body.enableLeaderboard === undefined ? event.enable_leaderboard : (body.enableLeaderboard ? 1 : 0),
       body.enableGallery === undefined ? (event.enable_gallery == null ? 1 : event.enable_gallery) : (body.enableGallery ? 1 : 0),
       body.enableMusic === undefined ? (event.enable_music == null ? 1 : event.enable_music) : (body.enableMusic ? 1 : 0),
+      body.enableGuestbook === undefined ? (event.enable_guestbook ? 1 : 0) : (body.enableGuestbook ? 1 : 0),
       event.id,
   );
 
@@ -503,8 +511,8 @@ router.post('/events/:id/duplicate', (req, res) => {
     db.prepare(`
       INSERT INTO events
         (id, slug, name, occasion_type, event_date, status, theme_preset, theme_json,
-         header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music)
-      VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)
+         header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music, enable_guestbook)
+      VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       newId, slug, name,
       event.occasion_type, event.event_date,
@@ -513,6 +521,7 @@ router.post('/events/:id/duplicate', (req, res) => {
       event.enable_leaderboard ? 1 : 0,
       event.enable_gallery == null ? 1 : (event.enable_gallery ? 1 : 0),
       event.enable_music == null ? 1 : (event.enable_music ? 1 : 0),
+      event.enable_guestbook ? 1 : 0,
     );
 
     const qid = uid();
@@ -581,6 +590,34 @@ router.delete('/events/:id/scores', (req, res) => {
   if (!event) return res.status(404).json({ error: 'Event not found.' });
   const info = db.prepare('DELETE FROM score_submissions WHERE event_id = ?').run(event.id);
   res.json({ deleted: info.changes });
+});
+
+router.get('/events/:id/guestbook', (req, res) => {
+  const event = eventById(req.params.id);
+  if (!event) return res.status(404).json({ error: 'Event not found.' });
+  const rows = db.prepare(`
+    SELECT id, guest_name, message, created_at
+    FROM guestbook_entries WHERE event_id = ? ORDER BY created_at DESC
+  `).all(event.id);
+  res.json({
+    count: rows.length,
+    entries: rows.map((r) => ({
+      id: r.id,
+      name: r.guest_name,
+      message: r.message,
+      createdAt: r.created_at,
+    })),
+  });
+});
+
+router.delete('/events/:id/guestbook/:entryId', (req, res) => {
+  const event = eventById(req.params.id);
+  if (!event) return res.status(404).json({ error: 'Event not found.' });
+  const info = db.prepare(
+    'DELETE FROM guestbook_entries WHERE id = ? AND event_id = ?'
+  ).run(req.params.entryId, event.id);
+  if (!info.changes) return res.status(404).json({ error: 'Entry not found.' });
+  res.json({ ok: true });
 });
 
 // ── Quiz copy ────────────────────────────────────────────────────────────────
