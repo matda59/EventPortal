@@ -6,26 +6,55 @@
 (function () {
   'use strict';
 
-  const DEFAULT_THEME = {
-    primaryRed:    '#B83B26',
-    accentOrange:  '#D96B27',
-    highlightPink: '#D86B81',
-    bgEarth:       '#FBF6EF',
-    surfaceCard:   '#FFFFFF',
-    textDark:      '#2B2121',
-  };
-
-  const THEME_PRESETS = {
-    birthday: {
-      label: 'Birthday',
-      emoji: '🎉',
-      theme: DEFAULT_THEME,
-    },
-    wedding: {
-      label: 'Wedding',
-      emoji: '💍',
+  const COLOR_THEMES = {
+    pink: {
+      label: 'Pink',
       theme: {
-        primaryRed:    '#6B3A5A',
+        primaryRed:    '#C2185B',
+        accentOrange:  '#EC407A',
+        highlightPink: '#F48FB1',
+        bgEarth:       '#FDF4F7',
+        surfaceCard:   '#FFFFFF',
+        textDark:      '#3A1528',
+      },
+    },
+    blue: {
+      label: 'Blue',
+      theme: {
+        primaryRed:    '#1565C0',
+        accentOrange:  '#1E88E5',
+        highlightPink: '#64B5F6',
+        bgEarth:       '#F3F8FC',
+        surfaceCard:   '#FFFFFF',
+        textDark:      '#0D2137',
+      },
+    },
+    gold: {
+      label: 'Gold',
+      theme: {
+        primaryRed:    '#B8860B',
+        accentOrange:  '#D4A017',
+        highlightPink: '#E8C547',
+        bgEarth:       '#FBF6EA',
+        surfaceCard:   '#FFFFFF',
+        textDark:      '#2C2410',
+      },
+    },
+    silver: {
+      label: 'Silver',
+      theme: {
+        primaryRed:    '#5A6570',
+        accentOrange:  '#8A96A3',
+        highlightPink: '#B7C0C8',
+        bgEarth:       '#F5F6F8',
+        surfaceCard:   '#FFFFFF',
+        textDark:      '#1C2328',
+      },
+    },
+    rose: {
+      label: 'Rose',
+      theme: {
+        primaryRed:    '#8B2942',
         accentOrange:  '#C4A574',
         highlightPink: '#D4A5B8',
         bgEarth:       '#F7F3EE',
@@ -33,63 +62,60 @@
         textDark:      '#2C2428',
       },
     },
-    retirement: {
-      label: 'Retirement',
-      emoji: '🌅',
+    navy: {
+      label: 'Navy',
       theme: {
-        primaryRed:    '#1F4E5A',
-        accentOrange:  '#C49A3C',
-        highlightPink: '#7A9E9F',
-        bgEarth:       '#F4F1EA',
+        primaryRed:    '#1B3A5F',
+        accentOrange:  '#3D6B99',
+        highlightPink: '#7FA3C4',
+        bgEarth:       '#F3F5F8',
         surfaceCard:   '#FFFFFF',
-        textDark:      '#243033',
+        textDark:      '#121A26',
       },
     },
-    'kids-party': {
-      label: 'Kids party',
-      emoji: '🦄',
-      theme: {
-        primaryRed:    '#E23D6B',
-        accentOrange:  '#FF8A3D',
-        highlightPink: '#7C5CFF',
-        bgEarth:       '#FFF7EC',
-        surfaceCard:   '#FFFFFF',
-        textDark:      '#2B2140',
-      },
-    },
-    anniversary: {
-      label: 'Anniversary',
-      emoji: '💕',
-      theme: {
-        primaryRed:    '#8B2942',
-        accentOrange:  '#C9A227',
-        highlightPink: '#D97B93',
-        bgEarth:       '#FBF4F1',
-        surfaceCard:   '#FFFFFF',
-        textDark:      '#2A1C20',
-      },
-    },
-    holiday: {
-      label: 'Holiday',
-      emoji: '🎄',
+    forest: {
+      label: 'Forest',
       theme: {
         primaryRed:    '#165B3A',
-        accentOrange:  '#C4A35A',
-        highlightPink: '#A63D2F',
+        accentOrange:  '#3D8B5C',
+        highlightPink: '#C4A35A',
         bgEarth:       '#F3F0E7',
         surfaceCard:   '#FFFFFF',
         textDark:      '#1F2A24',
       },
     },
+    sunset: {
+      label: 'Sunset',
+      theme: {
+        primaryRed:    '#B83B26',
+        accentOrange:  '#D96B27',
+        highlightPink: '#D86B81',
+        bgEarth:       '#FBF6EF',
+        surfaceCard:   '#FFFFFF',
+        textDark:      '#2B2121',
+      },
+    },
+  };
+
+  const DEFAULT_THEME = Object.assign({}, COLOR_THEMES.pink.theme);
+  const DEFAULT_EVENT = {
+    status: 'draft',
+    enableQuiz: true,
+    enableLeaderboard: true,
+    enableGallery: true,
+    enableMusic: true,
+    occasionType: 'Birthday',
+    themePreset: 'pink',
+    theme: DEFAULT_THEME,
   };
 
   const OCCASIONS = [
-    { value: 'Birthday',    preset: 'birthday' },
-    { value: 'Wedding',     preset: 'wedding' },
-    { value: 'Anniversary', preset: 'anniversary' },
-    { value: 'Retirement',  preset: 'retirement' },
-    { value: 'Kids party',  preset: 'kids-party' },
-    { value: 'Holiday',     preset: 'holiday' },
+    { value: 'Birthday' },
+    { value: 'Wedding' },
+    { value: 'Anniversary' },
+    { value: 'Retirement' },
+    { value: 'Kids party' },
+    { value: 'Holiday' },
   ];
 
   const THEME_FIELDS = [
@@ -209,6 +235,25 @@
       if (v) theme[key] = v;
     });
     return theme;
+  }
+
+  function hexEq(a, b) {
+    return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  }
+
+  function themesEqual(a, b) {
+    return THEME_FIELDS.every(([key]) => hexEq(a && a[key], b && b[key]));
+  }
+
+  function resolveColorThemeId(ev) {
+    const theme = ev && ev.theme;
+    if (theme) {
+      const match = Object.entries(COLOR_THEMES).find(([, p]) => themesEqual(p.theme, theme));
+      if (match) return match[0];
+    }
+    const id = ev && ev.themePreset;
+    if (id && COLOR_THEMES[id]) return id;
+    return 'custom';
   }
 
   // ── Login ──────────────────────────────────────────────────────────
@@ -373,6 +418,7 @@
   // ── Editor ─────────────────────────────────────────────────────────
   function eventFields(ev, isNew) {
     const theme = Object.assign({}, DEFAULT_THEME, ev.theme || {});
+    const selectedTheme = resolveColorThemeId(ev);
     const colors = THEME_FIELDS.map(([key, label]) => `
       <div class="field">
         <label>${esc(label)}</label>
@@ -381,6 +427,19 @@
           <input type="text" id="theme-${key}" value="${esc(theme[key] || '')}" />
         </div>
       </div>`).join('');
+    const themeCards = Object.entries(COLOR_THEMES).map(([id, p]) => {
+      const t = p.theme;
+      return `
+        <button type="button" class="theme-card ${selectedTheme === id ? 'selected' : ''}" data-theme="${esc(id)}" role="radio" aria-checked="${selectedTheme === id ? 'true' : 'false'}">
+          <span class="theme-swatch" aria-hidden="true">
+            <span style="background:${esc(t.primaryRed)}"></span>
+            <span style="background:${esc(t.accentOrange)}"></span>
+            <span style="background:${esc(t.highlightPink)}"></span>
+            <span style="background:${esc(t.bgEarth)}"></span>
+          </span>
+          <strong>${esc(p.label)}</strong>
+        </button>`;
+    }).join('');
 
     return `
       <div class="form-grid">
@@ -454,19 +513,28 @@
             </label>
           </div>
         </div>
-        <div class="field span-2">
-          <label for="ev-preset">Theme preset</label>
-          <div class="path-pick">
-            <select id="ev-preset">
-              <option value="custom" ${!ev.themePreset || ev.themePreset === 'custom' ? 'selected' : ''}>Custom</option>
-              ${Object.entries(THEME_PRESETS).map(([id, p]) =>
-                `<option value="${esc(id)}" ${ev.themePreset === id ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}
-            </select>
-            <button class="btn btn-ghost" type="button" id="apply-preset">Apply colours</button>
+        <div class="span-2">
+          <h2 class="section-title">Colour theme</h2>
+          <p class="hint">Pick a look for the public quiz. Open Advanced if you want to tweak individual colours.</p>
+          <input type="hidden" id="ev-preset" value="${esc(selectedTheme)}" />
+          <div class="theme-grid" id="theme-grid" role="radiogroup" aria-label="Colour theme">
+            ${themeCards}
+            <button type="button" class="theme-card ${selectedTheme === 'custom' ? 'selected' : ''}" data-theme="custom" role="radio" aria-checked="${selectedTheme === 'custom' ? 'true' : 'false'}">
+              <span class="theme-swatch" aria-hidden="true">
+                <span style="background:${esc(theme.primaryRed)}"></span>
+                <span style="background:${esc(theme.accentOrange)}"></span>
+                <span style="background:${esc(theme.highlightPink)}"></span>
+                <span style="background:${esc(theme.bgEarth)}"></span>
+              </span>
+              <strong>Custom</strong>
+            </button>
           </div>
         </div>
-        <p class="hint span-2">Presets fill the colour pickers below. Save the event to keep them. They apply to the public quiz, not this admin screen.</p>
-        ${colors}
+        <details class="advanced-colors span-2" id="advanced-colors" ${selectedTheme === 'custom' ? 'open' : ''}>
+          <summary>Advanced colours</summary>
+          <p class="hint">These fill in from the theme above. Changing them switches the event to Custom.</p>
+          <div class="form-grid">${colors}</div>
+        </details>
       </div>
       <div class="row" style="margin-top:18px">
         <button class="btn btn-primary" id="save-event" type="button">${isNew ? 'Create event' : 'Save event'}</button>
@@ -756,7 +824,7 @@
 
   function renderEditor() {
     const isNew = state.eventId === 'new';
-    const detail = state.detail || { event: { status: 'draft', enableQuiz: true, enableLeaderboard: true, enableGallery: true, enableMusic: true, occasionType: 'Birthday', themePreset: 'birthday', theme: DEFAULT_THEME }, quiz: null, questions: [] };
+    const detail = state.detail || { event: Object.assign({}, DEFAULT_EVENT), quiz: null, questions: [] };
     const ev = detail.event || {};
     const tabs = isNew ? '' : `
       <div class="tabs">
@@ -787,7 +855,7 @@
             <div>
               <button class="btn btn-ghost btn-sm" data-go="/admin" style="margin-bottom:8px">← All events</button>
               <h1>${isNew ? 'New event' : esc(ev.name || 'Event')}</h1>
-              ${isNew ? '<p class="sub">Pick the occasion and which guest features to include, then save.</p>' : `<p class="sub"><a href="/e/${esc(ev.slug || '')}" target="_blank" rel="noopener">/e/${esc(ev.slug || '')}</a></p>`}
+              ${isNew ? '<p class="sub">Pick the occasion, a colour theme, and which guest features to include, then save.</p>' : `<p class="sub"><a href="/e/${esc(ev.slug || '')}" target="_blank" rel="noopener">/e/${esc(ev.slug || '')}</a></p>`}
             </div>
             ${!isNew && ev.slug ? `<div class="row" style="gap:8px;flex-wrap:wrap">
               <a class="btn btn-ghost" href="/e/${esc(ev.slug)}" target="_blank" rel="noopener">Open public quiz</a>
@@ -824,12 +892,34 @@
       picker.addEventListener('input', () => {
         const t = document.getElementById(picker.getAttribute('data-sync'));
         if (t) t.value = picker.value;
+        markThemeCustomIfTweaked();
+      });
+    });
+    THEME_FIELDS.forEach(([key]) => {
+      const text = document.getElementById('theme-' + key);
+      if (!text) return;
+      text.addEventListener('input', () => {
+        const picker = document.getElementById('theme-' + key + '-picker');
+        if (picker && /^#[0-9a-fA-F]{6}$/.test(text.value.trim())) picker.value = text.value.trim();
+        markThemeCustomIfTweaked();
+      });
+    });
+    $app.querySelectorAll('[data-theme]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-theme');
+        if (id === 'custom') {
+          const sel = document.getElementById('ev-preset');
+          if (sel) sel.value = 'custom';
+          markThemeSelected('custom');
+          const adv = document.getElementById('advanced-colors');
+          if (adv) adv.open = true;
+          return;
+        }
+        applyColorTheme(id);
       });
     });
     const saveEv = document.getElementById('save-event');
     if (saveEv) saveEv.addEventListener('click', () => saveEvent(isNew));
-    const applyPreset = document.getElementById('apply-preset');
-    if (applyPreset) applyPreset.addEventListener('click', applyThemePreset);
     const occasion = document.getElementById('ev-occasion');
     if (occasion) occasion.addEventListener('change', syncOccasionUi);
 
@@ -897,12 +987,16 @@
     }));
   }
 
-  function applyThemePreset() {
-    if (!fillThemePreset(val('ev-preset'))) toast('Pick a named preset first', 'err');
+  function markThemeSelected(id) {
+    $app.querySelectorAll('[data-theme]').forEach((btn) => {
+      const on = btn.getAttribute('data-theme') === id;
+      btn.classList.toggle('selected', on);
+      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
   }
 
-  function fillThemePreset(id, opts) {
-    const preset = THEME_PRESETS[id];
+  function applyColorTheme(id) {
+    const preset = COLOR_THEMES[id];
     if (!preset) return false;
     THEME_FIELDS.forEach(([key]) => {
       const hex = preset.theme[key];
@@ -911,20 +1005,39 @@
       if (text && hex) text.value = hex;
       if (picker && hex) picker.value = hex;
     });
-    const emoji = document.getElementById('ev-emoji');
-    if (emoji && preset.emoji) emoji.value = preset.emoji;
     const sel = document.getElementById('ev-preset');
     if (sel) sel.value = id;
-    if (!opts || opts.toast !== false) toast('Colours applied — save the event to keep them');
+    markThemeSelected(id);
+    const customCard = $app.querySelector('[data-theme="custom"] .theme-swatch');
+    if (customCard) {
+      const spans = customCard.querySelectorAll('span');
+      const keys = ['primaryRed', 'accentOrange', 'highlightPink', 'bgEarth'];
+      keys.forEach((key, i) => { if (spans[i] && preset.theme[key]) spans[i].style.background = preset.theme[key]; });
+    }
     return true;
+  }
+
+  function markThemeCustomIfTweaked() {
+    const current = readThemeFromForm();
+    const presetId = val('ev-preset');
+    const preset = COLOR_THEMES[presetId];
+    if (preset && themesEqual(current, preset.theme)) return;
+    const sel = document.getElementById('ev-preset');
+    if (sel) sel.value = 'custom';
+    markThemeSelected('custom');
+    const customCard = $app.querySelector('[data-theme="custom"] .theme-swatch');
+    if (customCard) {
+      const spans = customCard.querySelectorAll('span');
+      ['primaryRed', 'accentOrange', 'highlightPink', 'bgEarth'].forEach((key, i) => {
+        if (spans[i] && current[key]) spans[i].style.background = current[key];
+      });
+    }
   }
 
   function syncOccasionUi() {
     const v = val('ev-occasion');
     const wrap = document.getElementById('ev-occasion-custom-wrap');
     if (wrap) wrap.hidden = v !== 'Other';
-    const match = OCCASIONS.find((o) => o.value === v);
-    if (match && match.preset) fillThemePreset(match.preset, { toast: false });
   }
 
   async function saveEvent(isNew) {
@@ -1301,7 +1414,7 @@
         renderEditor();
       } else if (state.view === 'editor') {
         await loadMedia();
-        state.detail = { event: { status: 'draft', enableQuiz: true, enableLeaderboard: true, enableGallery: true, enableMusic: true, occasionType: 'Birthday', themePreset: 'birthday', theme: DEFAULT_THEME }, quiz: null, questions: [] };
+        state.detail = { event: Object.assign({}, DEFAULT_EVENT), quiz: null, questions: [] };
         renderEditor();
       }
     } catch (err) {

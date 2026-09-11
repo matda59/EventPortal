@@ -219,6 +219,53 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .check.playlist-check { padding-top: 0; font-weight: 500; word-break: break-all; }
 
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 10px;
+}
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.theme-card:hover { border-color: #c7d2fe; }
+.theme-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.theme-swatch {
+  display: flex;
+  height: 38px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.theme-swatch span { flex: 1; }
+.theme-card strong { font-size: 0.9rem; font-weight: 700; }
+
+.advanced-colors {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 4px 14px 12px;
+}
+.advanced-colors summary {
+  cursor: pointer;
+  font-weight: 650;
+  padding: 10px 0;
+  color: #334155;
+}
+.advanced-colors .form-grid { margin-top: 4px; }
+
 .color-row { display: flex; gap: 8px; align-items: center; }
 .color-row input[type="color"] { width: 42px; height: 34px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
 .color-row input[type="text"] { flex: 1; }
