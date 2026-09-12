@@ -209,6 +209,29 @@ function ensureQuiz(eventId, title) {
   return quizByEvent(eventId);
 }
 
+function cleanPhotos(list) {
+  if (!Array.isArray(list)) return null;
+  return list.slice(0, 6).map((p) => ({
+    src:     str(p?.src, 240, ''),
+    caption: str(p?.caption, 80, ''),
+  }));
+}
+
+function applyQuizLook(eventId, body) {
+  if (!body || (body.photos === undefined && body.bgImage === undefined && body.heroImage === undefined)) {
+    return quizByEvent(eventId);
+  }
+  const quiz = ensureQuiz(eventId);
+  const ecard = parseJson(quiz.ecard_json, {});
+  const photos = cleanPhotos(body.photos);
+  if (photos) ecard.photos = photos;
+  const bg = body.bgImage !== undefined ? body.bgImage : body.heroImage;
+  const hero = bg === undefined ? quiz.hero_image : str(bg, 240, null);
+  db.prepare('UPDATE quizzes SET hero_image = ?, ecard_json = ? WHERE id = ?')
+    .run(hero, JSON.stringify(ecard), quiz.id);
+  return quizByEvent(eventId);
+}
+
 function uniqueFilename(dir, original) {
   const ext  = path.extname(original).toLowerCase();
   const base = path.basename(original, ext)
@@ -403,6 +426,7 @@ router.post('/events', (req, res) => {
       body.enableGuestbook === false ? 0 : 1,
     );
     ensureQuiz(id, name);
+    applyQuizLook(id, body);
   });
   tx();
 
@@ -477,8 +501,9 @@ router.put('/events/:id', (req, res) => {
 
   // Keep quiz.theme_json in sync so public-config stays consistent.
   db.prepare('UPDATE quizzes SET theme_json = ? WHERE event_id = ?').run(themeJ, event.id);
+  const quiz = applyQuizLook(event.id, body);
 
-  res.json({ event: serializeEvent(eventById(event.id)) });
+  res.json({ event: serializeEvent(eventById(event.id)), quiz: serializeQuiz(quiz) });
 });
 
 router.delete('/events/:id', (req, res) => {
@@ -807,7 +832,7 @@ router.delete('/questions/:qid', (req, res) => {
 router.get('/media', async (_req, res) => {
   try {
     const [images, music] = await Promise.all([
-      listMedia(IMAGES_DIR, '/images', /\.(jpe?g|png|gif|webp)$/i),
+      listMedia(IMAGES_DIR, '/images', /\.(jpe?g|png|gif|webp|mp4|webm)$/i),
       listMedia(MUSIC_DIR,  '/music',  /\.mp3$/i),
     ]);
     res.json({ images, music });

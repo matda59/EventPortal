@@ -39,7 +39,16 @@ body {
   justify-content: flex-start;
 }
 
-.app { width: 100%; max-width: 720px; margin: 0 auto; }
+body.has-page-bg {
+  background:
+    linear-gradient(color-mix(in srgb, var(--bg-earth) 76%, transparent), color-mix(in srgb, var(--bg-earth) 88%, transparent)),
+    var(--page-bg-image) center / cover no-repeat fixed,
+    var(--bg-earth);
+}
+body.has-page-bg .site-chrome {
+  background: color-mix(in srgb, var(--bg-earth) 82%, transparent);
+  backdrop-filter: blur(10px);
+}
 
 .site-chrome {
   position: sticky;
