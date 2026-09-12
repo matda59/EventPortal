@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Event Quiz</title>
+  <title>Event</title>
   <meta name="theme-color" content="#B83B26" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%89%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/styles.css" />
@@ -27,21 +27,27 @@
     </div>
   </div>
 
+  <header id="site-chrome" class="site-chrome" hidden>
+    <button type="button" id="nav-home" class="site-home">← Home</button>
+    <div class="site-brand">
+      <span id="chrome-emoji"></span>
+      <span id="chrome-name"></span>
+    </div>
+  </header>
+
   <main class="app">
 
-    <!-- SCREEN 0: E-Card Intro -->
-    <section id="screen-ecard" class="screen ecard">
-      <div class="photo-board" id="photo-board" aria-hidden="true"></div>
-      <div class="ecard-center">
-        <div class="ecard-confetti" id="ecard-confetti">✨🎉✨</div>
-        <h1 id="ecard-greeting" class="ecard-greeting">Welcome!</h1>
-        <p id="ecard-sub" class="ecard-sub"></p>
-        <p id="ecard-message" class="ecard-message"></p>
-        <button id="ecard-start" class="btn btn-primary ecard-btn" type="button">Start the Quiz →</button>
-      </div>
+    <section id="screen-home" class="screen home-screen active">
+      <img id="home-hero" class="hero-image" alt="" hidden />
+      <p class="home-kicker" id="home-kicker"></p>
+      <h1 class="home-title">
+        <span id="home-emoji" class="home-emoji"></span>
+        <span id="home-name">Loading…</span>
+      </h1>
+      <p class="home-desc" id="home-description"></p>
+      <nav id="home-nav" class="home-nav" aria-label="Event menu"></nav>
     </section>
 
-    <!-- Guest book -->
     <section id="screen-guestbook" class="screen card">
       <h1 class="title" id="guestbook-title">Guest book</h1>
       <p class="lead" id="guestbook-lead">Leave a short note for the hosts.</p>
@@ -56,13 +62,25 @@
         <button type="submit" class="btn btn-primary btn-block">Sign the guest book</button>
       </form>
       <div id="guestbook-list" class="guestbook-list"></div>
-      <button id="guestbook-continue" class="btn btn-secondary btn-block" type="button">Continue →</button>
     </section>
 
-    <!-- SCREEN 1: Welcome / Name Entry -->
-    <section id="screen-welcome" class="screen card active">
+    <section id="screen-gallery" class="screen card">
+      <h1 class="title">Gallery</h1>
+      <p class="lead">Photos and clips from the event.</p>
+      <div id="gallery-grid" class="gallery-grid"></div>
+    </section>
+
+    <section id="screen-hof" class="screen card">
+      <h1 class="title">Hall of Fame</h1>
+      <p class="lead">The quiz leaderboard.</p>
+      <div id="hof-home-rows" class="hof-rows">
+        <div class="hof-loading">Loading…</div>
+      </div>
+    </section>
+
+    <section id="screen-welcome" class="screen card">
       <img id="welcome-hero" class="hero-image" alt="" hidden />
-      <h1 id="welcome-title" class="title">Loading…</h1>
+      <h1 id="welcome-title" class="title">Quiz</h1>
       <p id="welcome-subtitle" class="subtitle"></p>
       <p id="welcome-message" class="lead"></p>
       <form id="name-form" class="name-form" novalidate>
@@ -74,7 +92,6 @@
       </form>
     </section>
 
-    <!-- SCREEN 2: Quiz -->
     <section id="screen-quiz" class="screen card">
       <div class="progress-head">
         <span id="progress-label" class="progress-label">Question 1 of 1</span>
@@ -91,7 +108,6 @@
       <button id="next-btn" class="btn btn-primary btn-block" type="button" disabled>Next</button>
     </section>
 
-    <!-- SCREEN 3: Results & Hall of Fame -->
     <section id="screen-results" class="screen card">
       <h1 id="tier-title" class="title"></h1>
       <div class="score-ring">
@@ -106,6 +122,7 @@
         </div>
       </div>
       <button id="play-again-btn" class="btn btn-secondary btn-block" type="button">Play Again ↺</button>
+      <button id="results-home" class="btn btn-primary btn-block" type="button">Back to event home</button>
     </section>
 
   </main>

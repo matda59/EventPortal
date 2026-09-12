@@ -17,6 +17,7 @@ db.exec(`
     id            TEXT PRIMARY KEY,
     slug          TEXT UNIQUE NOT NULL,
     name          TEXT NOT NULL,
+    description   TEXT,
     occasion_type TEXT NOT NULL DEFAULT 'Birthday',
     event_date    TEXT,
     status        TEXT NOT NULL DEFAULT 'active',
@@ -131,5 +132,6 @@ function addColumnIfMissing(table, name, ddl) {
 addColumnIfMissing('events', 'enable_gallery', 'enable_gallery INTEGER NOT NULL DEFAULT 1');
 addColumnIfMissing('events', 'enable_music', 'enable_music INTEGER NOT NULL DEFAULT 1');
 addColumnIfMissing('events', 'enable_guestbook', 'enable_guestbook INTEGER NOT NULL DEFAULT 0');
+addColumnIfMissing('events', 'description', 'description TEXT');
 
 module.exports = db;

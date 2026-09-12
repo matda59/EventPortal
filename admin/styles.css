@@ -422,7 +422,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: flex;
   flex-direction: column;
 }
-.media-item img { width: 100%; height: 110px; object-fit: cover; background: #e2e8f0; }
+.media-item img, .media-item video { width: 100%; height: 110px; object-fit: cover; background: #e2e8f0; }
 .media-item .body { padding: 8px 10px 10px; }
 .media-item .name { font-size: 0.78rem; word-break: break-all; font-weight: 650; }
 .drop {

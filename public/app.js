@@ -33,8 +33,10 @@
   // ── Element cache ──────────────────────────────────────────────────
   const $ = (id) => document.getElementById(id);
   const screens = {
-    ecard:      $('screen-ecard'),
+    home:       $('screen-home'),
     guestbook:  $('screen-guestbook'),
+    gallery:    $('screen-gallery'),
+    hof:        $('screen-hof'),
     welcome:    $('screen-welcome'),
     quiz:       $('screen-quiz'),
     results:    $('screen-results')
@@ -48,9 +50,16 @@
   }
 
   function showScreen(name) {
-    Object.values(screens).forEach((s) => s.classList.remove('active'));
-    screens[name].classList.add('active');
+    Object.values(screens).forEach((s) => { if (s) s.classList.remove('active'); });
+    if (screens[name]) screens[name].classList.add('active');
+    const chrome = $('site-chrome');
+    if (chrome) chrome.hidden = name === 'home';
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function eventLabel() {
+    const meta = (state.config && state.config.meta) || {};
+    return meta.eventName || meta.title || 'Event';
   }
 
   function guestFlags() {
@@ -67,21 +76,25 @@
 
   function showUnavailable({ title, subtitle, message, heroImage }) {
     document.title = title;
-    $('welcome-title').textContent    = title;
-    $('welcome-subtitle').textContent = subtitle || '';
-    $('welcome-message').textContent  = message || '';
-    $('name-form').hidden = true;
-    const hero = $('welcome-hero');
-    if (heroImage) {
-      hero.src    = heroImage;
-      hero.alt    = title || '';
-      hero.hidden = false;
-      hero.onerror = () => { hero.hidden = true; };
-    } else {
-      hero.hidden = true;
-      hero.removeAttribute('src');
+    const emoji = ((state.config && state.config.meta) || {}).headerEmoji || '';
+    if ($('home-emoji')) $('home-emoji').textContent = emoji;
+    if ($('home-name')) $('home-name').textContent = title;
+    if ($('home-kicker')) $('home-kicker').textContent = subtitle || '';
+    if ($('home-description')) $('home-description').textContent = message || '';
+    if ($('home-nav')) $('home-nav').innerHTML = '';
+    const hero = $('home-hero');
+    if (hero) {
+      if (heroImage) {
+        hero.src = heroImage;
+        hero.alt = title || '';
+        hero.hidden = false;
+        hero.onerror = () => { hero.hidden = true; };
+      } else {
+        hero.hidden = true;
+        hero.removeAttribute('src');
+      }
     }
-    showScreen('welcome');
+    showScreen('home');
   }
 
   function applyGuestFlags() {
@@ -165,11 +178,25 @@
     };
   }
 
-  function hasEcard(ecard) {
-    if (!ecard || typeof ecard !== 'object') return false;
-    if (ecard.greeting || ecard.subGreeting || ecard.message || ecard.buttonText) return true;
-    if (!guestFlags().enableGallery) return false;
-    return Array.isArray(ecard.photos) && ecard.photos.some((p) => p && (p.src || p.caption));
+  function fillChrome(meta) {
+    if ($('chrome-emoji')) $('chrome-emoji').textContent = (meta && meta.headerEmoji) || '';
+    if ($('chrome-name')) $('chrome-name').textContent = eventLabel();
+  }
+
+  function formatEventDate(value) {
+    if (!value) return '';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  function galleryItems(ecard) {
+    const photos = (ecard && Array.isArray(ecard.photos)) ? ecard.photos : [];
+    return photos.filter((p) => p && p.src);
+  }
+
+  function isVideoSrc(src) {
+    return /\.(mp4|webm|ogg|mov)(\?|$)/i.test(src || '');
   }
 
   // ── Load config ────────────────────────────────────────────────────
@@ -200,15 +227,16 @@
     const f    = guestFlags();
     const copy = occasionCopy(meta);
     applyTheme(meta.theme);
-    document.title = meta.title || (f.status === 'ended' ? 'Event ended' : 'Quiz');
+    document.title = meta.eventName || meta.title || (f.status === 'ended' ? 'Event ended' : 'Event');
+    fillChrome(meta);
     const musicLabel = $('mp3-label');
     if (musicLabel) musicLabel.textContent = copy.music;
 
     if (f.status === 'ended') {
       showUnavailable({
-        title:     meta.title || 'This event has ended',
-        subtitle:  meta.subtitle || '',
-        message:   meta.welcomeMessage || 'This event has ended. Thanks for celebrating with us.',
+        title:     meta.eventName || meta.title || 'This event has ended',
+        subtitle:  meta.occasionType || '',
+        message:   meta.description || meta.welcomeMessage || 'This event has ended. Thanks for celebrating with us.',
         heroImage: meta.heroImage,
       });
       setupMp3Player();
@@ -221,69 +249,168 @@
 
     if (meta.heroImage) {
       const hero = $('welcome-hero');
-      hero.src    = meta.heroImage;
-      hero.alt    = meta.honoree ? `Photo of ${meta.honoree}` : '';
-      hero.hidden = false;
-      hero.onerror = () => { hero.hidden = true; };
+      if (hero) {
+        hero.src    = meta.heroImage;
+        hero.alt    = meta.honoree ? `Photo of ${meta.honoree}` : '';
+        hero.hidden = false;
+        hero.onerror = () => { hero.hidden = true; };
+      }
     }
 
     state.questions = Array.isArray(state.config.questions) ? state.config.questions : [];
     applyGuestFlags();
     setupMp3Player();
     wireEvents();
+    renderHome();
+    showScreen('home');
+  }
 
-    const ecard = state.config.ecard || {};
-    if (hasEcard(ecard)) {
-      renderEcard(ecard, meta);
-      showScreen('ecard');
-    } else if (guestFlags().enableGuestbook) {
-      openGuestbook();
-    } else {
-      showScreen('welcome');
+  // ── Event home + feature screens ───────────────────────────────────
+  function renderHome() {
+    const meta  = (state.config && state.config.meta) || {};
+    const f     = guestFlags();
+    const copy  = occasionCopy(meta);
+    const ecard = (state.config && state.config.ecard) || {};
+    const items = galleryItems(ecard);
+
+    fillChrome(meta);
+    if ($('home-emoji')) $('home-emoji').textContent = meta.headerEmoji || '';
+    if ($('home-name')) $('home-name').textContent = eventLabel();
+    if ($('home-kicker')) {
+      const date = formatEventDate(meta.eventDate);
+      $('home-kicker').textContent = [meta.occasionType, date].filter(Boolean).join(' · ');
     }
-  }
+    if ($('home-description')) {
+      $('home-description').textContent =
+        meta.description || ecard.message || meta.welcomeMessage || copy.greeting;
+    }
 
-  // ── E-Card intro + floating photo board ────────────────────────────
-  function renderEcard(ecard, meta) {
-    const copy = occasionCopy(meta);
-    $('ecard-confetti').textContent = ecard.confetti || copy.confetti;
-    $('ecard-greeting').textContent = ecard.greeting  || copy.greeting;
-    $('ecard-sub').textContent      = ecard.subGreeting || '';
-    $('ecard-message').textContent  = ecard.message    || meta.welcomeMessage || '';
-    $('ecard-start').textContent    = ecard.buttonText
-      || (guestFlags().enableGuestbook ? 'Sign the guest book →'
-        : (guestFlags().enableQuiz ? 'Start the Quiz →' : 'Continue →'));
-    const label = $('mp3-label');
-    if (label) label.textContent = copy.music;
-    buildPhotoBoard(guestFlags().enableGallery && Array.isArray(ecard.photos) ? ecard.photos : []);
-  }
+    const hero = $('home-hero');
+    if (hero) {
+      if (meta.heroImage) {
+        hero.src = meta.heroImage;
+        hero.alt = meta.honoree ? `Photo of ${meta.honoree}` : eventLabel();
+        hero.hidden = false;
+        hero.onerror = () => { hero.hidden = true; };
+      } else {
+        hero.hidden = true;
+        hero.removeAttribute('src');
+      }
+    }
 
-  function buildPhotoBoard(photos) {
-    const board = $('photo-board');
-    board.innerHTML = '';
-    photos.slice(0, 6).forEach((p, i) => {
-      const fig     = document.createElement('figure');
-      fig.className = `polaroid pos-${i + 1}`;
-      const caption = p && p.caption ? escHtml(p.caption) : '';
-      const img     = p && p.src
-        ? `<img src="${escHtml(p.src)}" alt="${caption}" onerror="this.style.display='none'">`
-        : '';
-      fig.innerHTML =
-        `<div class="polaroid-photo">${img}</div>` +
-        (caption ? `<figcaption>${caption}</figcaption>` : '');
-      board.appendChild(fig);
+    const nav = $('home-nav');
+    if (!nav) return;
+    nav.innerHTML = '';
+
+    const tiles = [];
+    if (f.enableQuiz) {
+      tiles.push({
+        id: 'quiz',
+        emoji: '❓',
+        title: 'Quiz',
+        hint: meta.title ? `Play “${meta.title}”` : 'Test what you know',
+      });
+    }
+    if (f.enableGuestbook) {
+      tiles.push({
+        id: 'guestbook',
+        emoji: '✍️',
+        title: 'Guest book',
+        hint: 'Leave a note for the hosts',
+      });
+    }
+    if (f.enableGallery) {
+      tiles.push({
+        id: 'gallery',
+        emoji: '📷',
+        title: 'Gallery',
+        hint: items.length
+          ? `${items.length} photo${items.length === 1 ? '' : 's'} & clips`
+          : 'Photos and videos',
+      });
+    }
+    if (f.enableLeaderboard) {
+      tiles.push({
+        id: 'hof',
+        emoji: '🏆',
+        title: 'Hall of Fame',
+        hint: 'See the quiz leaderboard',
+      });
+    }
+
+    if (!tiles.length) {
+      nav.innerHTML = '<p class="hof-empty">This event has no guest features turned on yet.</p>';
+      return;
+    }
+
+    tiles.forEach((t) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'home-tile';
+      btn.innerHTML =
+        `<span class="home-tile-emoji">${t.emoji}</span>` +
+        `<span class="home-tile-title">${escHtml(t.title)}</span>` +
+        `<span class="home-tile-hint">${escHtml(t.hint)}</span>`;
+      btn.addEventListener('click', () => {
+        if (t.id === 'quiz') openQuiz();
+        else if (t.id === 'guestbook') openGuestbook();
+        else if (t.id === 'gallery') openGallery();
+        else if (t.id === 'hof') openHof();
+      });
+      nav.appendChild(btn);
     });
+  }
+
+  function goHome() {
+    renderHome();
+    showScreen('home');
+  }
+
+  function openQuiz() {
+    if (state.guestbookName && $('player-name') && !$('player-name').value) {
+      $('player-name').value = state.guestbookName;
+    }
+    showScreen('welcome');
+    if (guestFlags().enableQuiz) setTimeout(() => $('player-name') && $('player-name').focus(), 300);
+  }
+
+  function openGallery() {
+    const items = galleryItems((state.config && state.config.ecard) || {});
+    const grid = $('gallery-grid');
+    if (grid) {
+      if (!items.length) {
+        grid.innerHTML = '<p class="hof-empty">No photos or videos yet.</p>';
+      } else {
+        grid.innerHTML = items.map((p) => {
+          const src = escHtml(p.src);
+          const cap = p.caption ? escHtml(p.caption) : '';
+          const media = isVideoSrc(p.src)
+            ? `<video src="${src}" controls playsinline></video>`
+            : `<img src="${src}" alt="${cap}" />`;
+          return `<figure class="gallery-item">${media}${cap ? `<figcaption>${cap}</figcaption>` : ''}</figure>`;
+        }).join('');
+      }
+    }
+    showScreen('gallery');
+  }
+
+  async function openHof() {
+    const container = $('hof-home-rows');
+    if (container) container.innerHTML = '<div class="hof-loading">Loading…</div>';
+    showScreen('hof');
+    try {
+      const rows = await apiJson(SCORES_URL);
+      renderHallOfFame(rows, 'hof-home-rows');
+    } catch {
+      renderHallOfFame([], 'hof-home-rows');
+    }
   }
 
   // ── Welcome / name entry ───────────────────────────────────────────
   function wireEvents() {
-    $('ecard-start').addEventListener('click', () => {
-      if (guestFlags().enableGuestbook) openGuestbook();
-      else goAfterIntro();
-    });
-
+    $('nav-home')?.addEventListener('click', goHome);
+    $('results-home')?.addEventListener('click', goHome);
     $('guestbook-form')?.addEventListener('submit', onGuestbookSubmit);
-    $('guestbook-continue')?.addEventListener('click', goAfterIntro);
 
     $('name-form').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -307,14 +434,6 @@
     $('play-again-btn').addEventListener('click', resetAndRestart);
   }
 
-  function goAfterIntro() {
-    showScreen('welcome');
-    if (state.guestbookName && $('player-name') && !$('player-name').value) {
-      $('player-name').value = state.guestbookName;
-    }
-    if (guestFlags().enableQuiz) setTimeout(() => $('player-name').focus(), 300);
-  }
-
   function renderGuestbookList(entries) {
     const list = $('guestbook-list');
     if (!list) return;
@@ -336,7 +455,6 @@
     $('guestbook-lead').textContent = honoree
       ? `Leave a short note for ${honoree}.`
       : 'Leave a short note for the hosts.';
-    $('guestbook-continue').textContent = guestFlags().enableQuiz ? 'Continue to the quiz →' : 'Done';
     if (state.guestbookName) $('guestbook-name').value = state.guestbookName;
     showScreen('guestbook');
     try {
@@ -586,8 +704,9 @@
     }
   }
 
-  function renderHallOfFame(scores) {
-    const container = $('hof-rows');
+  function renderHallOfFame(scores, containerId) {
+    const container = $(containerId || 'hof-rows');
+    if (!container) return;
     if (!Array.isArray(scores) || scores.length === 0) {
       container.innerHTML = '<div class="hof-empty">No scores yet — be the first!</div>';
       return;

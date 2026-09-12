@@ -483,6 +483,10 @@
           <label for="ev-name">Name</label>
           <input id="ev-name" value="${esc(ev.name || '')}" ${isNew ? 'data-slug-source' : ''} required />
         </div>
+        <div class="field span-2">
+          <label for="ev-description">Description</label>
+          <textarea id="ev-description" placeholder="A short welcome guests see on the event home page.">${esc(ev.description || '')}</textarea>
+        </div>
         <div class="field">
           <label for="ev-slug">Slug (public URL)</label>
           <input id="ev-slug" value="${esc(ev.slug || '')}" required />
@@ -522,7 +526,7 @@
         <p class="hint span-2">draft is hidden from guests. active is live at /e/slug. ended shows “this event has ended”.</p>
         <div class="span-2">
           <h2 class="section-title">Guest features</h2>
-          <p class="hint">Turn on what this event should include. After you create it, write the opening welcome card, add photos, and add questions on the next tabs.</p>
+          <p class="hint">Turn on what guests can open from the event home page.</p>
           <div class="feature-grid">
             <label class="feature-card">
               <input type="checkbox" id="ev-quiz" ${ev.enableQuiz !== false ? 'checked' : ''} />
@@ -534,8 +538,8 @@
             <label class="feature-card">
               <input type="checkbox" id="ev-gallery" ${ev.enableGallery !== false ? 'checked' : ''} />
               <span>
-                <strong>Photo wall</strong>
-                <small>Up to six Polaroids around the opening welcome card</small>
+                <strong>Photo &amp; video gallery</strong>
+                <small>Photos and videos from the event home page</small>
               </span>
             </label>
             <label class="feature-card">
@@ -549,7 +553,7 @@
               <input type="checkbox" id="ev-hof" ${ev.enableLeaderboard !== false ? 'checked' : ''} />
               <span>
                 <strong>Hall of Fame</strong>
-                <small>Public leaderboard after the quiz</small>
+                <small>Quiz leaderboard from the event home page</small>
               </span>
             </label>
             <label class="feature-card">
@@ -561,7 +565,7 @@
             </label>
           </div>
           ${introPreviewHtml(null, { mini: true })}
-          <p class="hint">Guests see this first: a welcome card in the middle, with Polaroid photos around it. After you save, write the headline and pick the six photos on the Intro tab.</p>
+          <p class="hint">Guests land on a home page with the event name, description, and tiles for each feature you turn on. Photos live in the gallery from that home page — add them on the Intro tab after you save.</p>
         </div>
         <div class="span-2">
           <h2 class="section-title">Colour theme</h2>
@@ -943,7 +947,7 @@
             <div>
               <button class="btn btn-ghost btn-sm" data-go="/admin" style="margin-bottom:8px">← All events</button>
               <h1>${isNew ? 'New event' : esc(ev.name || 'Event')}</h1>
-              ${isNew ? '<p class="sub">Pick the occasion, a colour theme, and which guest features to include, then save.</p>' : `<p class="sub"><a href="/e/${esc(ev.slug || '')}" target="_blank" rel="noopener">/e/${esc(ev.slug || '')}</a></p>`}
+              ${isNew ? '<p class="sub">Name the event, write a short description, pick a colour theme, and choose guest features.</p>' : `<p class="sub"><a href="/e/${esc(ev.slug || '')}" target="_blank" rel="noopener">/e/${esc(ev.slug || '')}</a></p>`}
             </div>
             ${!isNew && ev.slug ? `<div class="row" style="gap:8px;flex-wrap:wrap">
               <a class="btn btn-ghost" href="/e/${esc(ev.slug)}" target="_blank" rel="noopener">Open public quiz</a>
@@ -1195,6 +1199,7 @@
       eventDate: val('ev-date') || null,
       status: val('ev-status'),
       headerEmoji: val('ev-emoji'),
+      description: val('ev-description'),
       enableQuiz: val('ev-quiz'),
       enableLeaderboard: val('ev-hof'),
       enableGallery: val('ev-gallery'),
@@ -1206,7 +1211,7 @@
     try {
       if (isNew) {
         const created = await api('/events', { method: 'POST', body: JSON.stringify(payload) });
-        toast('Event created. Write the opening welcome card and add photos on the next tab.');
+        toast('Event created. Add photos and questions on the next tabs.');
         state.detail = created;
         state.tab = 'quiz';
         go('/admin/events/' + created.event.id);
@@ -1371,7 +1376,7 @@
           </div>
           <div class="grid grid-2">
             <section>
-              <h2 class="section-title">Images</h2>
+              <h2 class="section-title">Photos &amp; videos</h2>
               ${dropzone('image')}
               <div class="media-grid">${mediaCards(state.media.images, 'image')}</div>
             </section>
@@ -1389,10 +1394,10 @@
   }
 
   function dropzone(kind) {
-    const accept = kind === 'music' ? '.mp3,audio/mpeg' : 'image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp';
+    const accept = kind === 'music' ? '.mp3,audio/mpeg' : 'image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,.jpg,.jpeg,.png,.gif,.webp,.mp4,.webm';
     return `
       <div class="drop" data-kind="${kind}">
-        Drop ${kind === 'music' ? 'MP3s' : 'images'} here or
+        Drop ${kind === 'music' ? 'MP3s' : 'photos or videos'} here or
         <label class="btn btn-ghost btn-sm" style="display:inline-flex;margin-left:6px">
           Browse
           <input type="file" accept="${accept}" hidden data-upload="${kind}" />
@@ -1404,7 +1409,11 @@
     if (!items || !items.length) return '<p class="empty">Nothing uploaded yet.</p>';
     return items.map((f) => `
       <article class="media-item">
-        ${kind === 'image' ? `<img src="${esc(f.url)}" alt="" />` : `<div style="padding:28px 10px;text-align:center;background:#0f172a;color:#fff;font-weight:700">MP3</div>`}
+        ${kind === 'image'
+          ? (/\.(mp4|webm)$/i.test(f.name || f.url || '')
+            ? `<video src="${esc(f.url)}" muted></video>`
+            : `<img src="${esc(f.url)}" alt="" />`)
+          : `<div style="padding:28px 10px;text-align:center;background:#0f172a;color:#fff;font-weight:700">MP3</div>`}
         <div class="body">
           <div class="name">${esc(f.name)}</div>
           <p class="meta">${esc(f.url)}</p>

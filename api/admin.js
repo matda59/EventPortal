@@ -17,7 +17,7 @@ const COOKIE_MAX  = 60 * 60 * 24 * 14;
 const PUBLIC_DIR  = path.join(__dirname, '..', 'public');
 const IMAGES_DIR  = path.join(PUBLIC_DIR, 'images');
 const MUSIC_DIR   = path.join(PUBLIC_DIR, 'music');
-const IMAGE_EXTS  = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+const IMAGE_EXTS  = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm']);
 const SLUG_RE     = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const STATUSES    = new Set(['active', 'draft', 'ended']);
 const MAX_UPLOAD  = 25 * 1024 * 1024;
@@ -99,6 +99,7 @@ function serializeEvent(row, extras = {}) {
     id:                row.id,
     slug:              row.slug,
     name:              row.name,
+    description:       row.description || '',
     occasionType:      row.occasion_type,
     eventDate:         row.event_date,
     status:            row.status,
@@ -381,13 +382,14 @@ router.post('/events', (req, res) => {
   const tx = db.transaction(() => {
     db.prepare(`
       INSERT INTO events
-        (id, slug, name, occasion_type, event_date, status, theme_preset, theme_json,
+        (id, slug, name, description, occasion_type, event_date, status, theme_preset, theme_json,
          header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music, enable_guestbook)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       slugRes.slug,
       name,
+      str(body.description, 800, ''),
       str(body.occasionType, 60, 'Birthday'),
       str(body.eventDate, 32, null),
       statusRes.status,
@@ -450,7 +452,7 @@ router.put('/events/:id', (req, res) => {
 
   db.prepare(`
     UPDATE events SET
-      slug = ?, name = ?, occasion_type = ?, event_date = ?, status = ?,
+      slug = ?, name = ?, description = ?, occasion_type = ?, event_date = ?, status = ?,
       theme_preset = ?, theme_json = ?, header_emoji = ?,
       enable_quiz = ?, enable_leaderboard = ?, enable_gallery = ?, enable_music = ?, enable_guestbook = ?,
       updated_at = datetime('now')
@@ -458,6 +460,7 @@ router.put('/events/:id', (req, res) => {
   `).run(
     slugRes.slug,
     name,
+    body.description === undefined ? (event.description || '') : str(body.description, 800, ''),
     str(body.occasionType, 60, event.occasion_type),
     body.eventDate === undefined ? event.event_date : str(body.eventDate, 32, null),
     statusRes.status,
@@ -510,11 +513,11 @@ router.post('/events/:id/duplicate', (req, res) => {
   const tx = db.transaction(() => {
     db.prepare(`
       INSERT INTO events
-        (id, slug, name, occasion_type, event_date, status, theme_preset, theme_json,
+        (id, slug, name, description, occasion_type, event_date, status, theme_preset, theme_json,
          header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music, enable_guestbook)
-      VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      newId, slug, name,
+      newId, slug, name, event.description || '',
       event.occasion_type, event.event_date,
       event.theme_preset, event.theme_json, event.header_emoji,
       event.enable_quiz ? 1 : 0,
@@ -824,7 +827,7 @@ router.post('/media', async (req, res) => {
       return res.status(400).json({ error: 'Only .mp3 files can be uploaded to the music volume.' });
     }
     if (kind === 'image' && !IMAGE_EXTS.has(ext)) {
-      return res.status(400).json({ error: 'Images must be jpg, png, gif, or webp.' });
+      return res.status(400).json({ error: 'Files must be jpg, png, gif, webp, mp4, or webm.' });
     }
     const dir  = kind === 'music' ? MUSIC_DIR : IMAGES_DIR;
     const name = uniqueFilename(dir, parsed.filename);
