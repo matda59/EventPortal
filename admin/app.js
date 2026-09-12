@@ -171,28 +171,41 @@
     toast._t = setTimeout(() => { $toast.className = 'toast'; }, 2800);
   }
 
-  function introPreviewHtml(ecard, opts) {
-    const mini = opts && opts.mini;
-    const photos = Array.from({ length: 6 }, (_, i) => (ecard && ecard.photos && ecard.photos[i]) || { src: '', caption: '' });
-    const greeting = (ecard && ecard.greeting) || 'Happy Birthday!';
-    const sub = (ecard && ecard.subGreeting) || 'A short tagline';
-    const msg = (ecard && ecard.message) || 'Your welcome note appears here.';
-    const btn = (ecard && ecard.buttonText) || 'Start the Quiz →';
+  function isMediaVideo(src) {
+    return /\.(mp4|webm|ogg|mov)(\?|$)/i.test(src || '');
+  }
+
+  function mediaThumbHtml(src) {
+    if (!src) return '';
+    if (isMediaVideo(src)) return `<video src="${esc(src)}" muted playsinline></video>`;
+    return `<img src="${esc(src)}" alt="">`;
+  }
+
+  function eventLookHtml(opts) {
+    const photos = Array.from({ length: 6 }, (_, i) => (opts && opts.photos && opts.photos[i]) || { src: '', caption: '' });
+    const bg = (opts && opts.bgImage) || '';
+    const name = (opts && opts.name) || 'Event name';
+    const desc = (opts && opts.description) || '';
     const polaroids = photos.map((p, i) => `
-      <figure class="intro-polaroid intro-pos-${i + 1}" data-preview-photo="${i}">
-        <div class="intro-polaroid-photo">${p.src ? `<img src="${esc(p.src)}" alt="">` : ''}</div>
-        <figcaption>${esc(p.caption || 'Photo ' + (i + 1))}</figcaption>
+      <figure class="intro-polaroid intro-pos-${i + 1} polaroid-edit ${p.src ? 'has-photo' : ''}">
+        <button type="button" class="polaroid-clear" data-clear-polaroid="${i}" ${p.src ? '' : 'hidden'} aria-label="Remove photo">×</button>
+        <button type="button" class="intro-polaroid-photo" data-pick-polaroid="${i}" title="Add a photo">${mediaThumbHtml(p.src)}</button>
+        <input class="polaroid-cap" id="photo-cap-${i}" value="${esc(p.caption || '')}" placeholder="Caption" maxlength="80" />
+        <input type="hidden" id="photo-src-${i}" value="${esc(p.src || '')}" />
       </figure>`).join('');
+    const bgCss = bg ? ` style="background-image:linear-gradient(rgba(251,246,239,0.55), rgba(251,246,239,0.72)), url('${String(bg).replace(/'/g, '%27')}')"` : '';
     return `
-      <div class="intro-preview ${mini ? 'intro-preview-mini' : ''}" aria-hidden="true">
-        <div class="intro-preview-stage">
+      <div class="intro-preview intro-preview-edit">
+        <div class="intro-preview-stage ${bg ? 'has-bg' : ''}" id="look-stage"${bgCss}>
           ${polaroids}
-          <div class="intro-preview-card">
-            <div class="intro-preview-confetti">✨🎉✨</div>
-            <div class="intro-preview-headline" id="preview-greeting">${esc(greeting)}</div>
-            <div class="intro-preview-tag" id="preview-sub">${esc(sub)}</div>
-            <div class="intro-preview-note" id="preview-msg">${esc(msg)}</div>
-            <div class="intro-preview-btn" id="preview-btn">${esc(btn)}</div>
+          <div class="intro-preview-card polaroid-center">
+            <div class="intro-preview-headline" id="look-name">${esc(name)}</div>
+            <div class="intro-preview-note" id="look-desc">${esc(desc || 'Guests see your description here.')}</div>
+            <input type="hidden" id="ev-bg" value="${esc(bg)}" />
+            <div class="look-bg-actions">
+              <button type="button" class="btn btn-ghost btn-sm" id="pick-bg">Set background</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="clear-bg" ${bg ? '' : 'hidden'}>Remove</button>
+            </div>
           </div>
         </div>
       </div>`;
@@ -487,6 +500,16 @@
           <label for="ev-description">Description</label>
           <textarea id="ev-description" placeholder="A short welcome guests see on the event home page.">${esc(ev.description || '')}</textarea>
         </div>
+        <div class="span-2">
+          <h2 class="section-title">Photos &amp; background</h2>
+          <p class="hint">Click a Polaroid on the left or right to add a photo from the library or your computer. Those photos are the guest gallery. Use the centre button for a page background.</p>
+          ${eventLookHtml({
+            photos: ((state.detail && state.detail.quiz && state.detail.quiz.ecard) || {}).photos,
+            bgImage: (state.detail && state.detail.quiz && state.detail.quiz.heroImage) || '',
+            name: ev.name || 'Event name',
+            description: ev.description || '',
+          })}
+        </div>
         <div class="field">
           <label for="ev-slug">Slug (public URL)</label>
           <input id="ev-slug" value="${esc(ev.slug || '')}" required />
@@ -564,8 +587,7 @@
               </span>
             </label>
           </div>
-          ${introPreviewHtml(null, { mini: true })}
-          <p class="hint">Guests land on a home page with the event name, description, and tiles for each feature you turn on. Photos live in the gallery from that home page — add them on the Intro tab after you save.</p>
+          <p class="hint">Guests land on a home page with the event name, description, and tiles for each feature you turn on.</p>
         </div>
         <div class="span-2">
           <h2 class="section-title">Colour theme</h2>
@@ -598,8 +620,6 @@
   function quizFields(quiz) {
     const q = quiz || {};
     const audio = q.audio || {};
-    const ecard = q.ecard || {};
-    const photos = Array.from({ length: 6 }, (_, i) => (ecard.photos && ecard.photos[i]) || { src: '', caption: '' });
     const tiers = (q.scoreTiers && q.scoreTiers.length) ? q.scoreTiers : [{ minPercent: 0, maxPercent: 100, title: '', message: '' }];
     const musicOpts = (name) => {
       const cur = name || '';
@@ -643,13 +663,6 @@
           <label for="quiz-welcome">Welcome message</label>
           <textarea id="quiz-welcome">${esc(q.welcomeMessage || '')}</textarea>
         </div>
-        <div class="field span-2">
-          <label>Hero image</label>
-          <div class="path-pick">
-            <input id="quiz-hero" value="${esc(q.heroImage || '')}" placeholder="/images/photo.jpg" />
-            <button class="btn btn-ghost" type="button" data-pick="image" data-target="quiz-hero">Browse</button>
-          </div>
-        </div>
       </div>
 
       <h2 class="section-title" style="margin-top:28px">Audio cues</h2>
@@ -672,45 +685,6 @@
       <h2 class="section-title" style="margin-top:28px">Guest playlist</h2>
       <p class="hint">Tick the tracks that should appear in this event’s public player. Shown to guests when Music player is on. Background music is included automatically.</p>
       ${playlistPicker(audio.playlist)}
-
-      <h2 class="section-title" style="margin-top:28px">Opening welcome screen</h2>
-      <p class="hint">This is the first screen guests see: a welcome card in the middle, with up to six Polaroid photos floating around it. The sketch below updates as you type.</p>
-      ${introPreviewHtml(ecard)}
-      <div class="form-grid">
-        <div class="field">
-          <label for="ecard-greeting">Headline</label>
-          <input id="ecard-greeting" value="${esc(ecard.greeting || '')}" placeholder="Happy Birthday, Naomi!" />
-        </div>
-        <div class="field">
-          <label for="ecard-sub">Tagline</label>
-          <input id="ecard-sub" value="${esc(ecard.subGreeting || '')}" placeholder="Four fabulous decades" />
-        </div>
-        <div class="field span-2">
-          <label for="ecard-message">Welcome note</label>
-          <textarea id="ecard-message" placeholder="A short message guests read before the quiz or guest book.">${esc(ecard.message || '')}</textarea>
-        </div>
-        <div class="field span-2">
-          <label for="ecard-btn">Button on the card</label>
-          <input id="ecard-btn" value="${esc(ecard.buttonText || '')}" placeholder="Start the Quiz →" />
-        </div>
-      </div>
-      <p class="hint" style="margin-top:12px">Add up to six Polaroid photos. They appear around the welcome card — not in a row on this form. Browse from the media library.</p>
-      <div class="grid" id="ecard-photos">
-        ${photos.map((p, i) => `
-          <div class="card">
-            <div class="field">
-              <label>Photo ${i + 1}</label>
-              <div class="path-pick">
-                <input id="photo-src-${i}" value="${esc(p.src || '')}" placeholder="/images/…" />
-                <button class="btn btn-ghost btn-sm" type="button" data-pick="image" data-target="photo-src-${i}">Browse</button>
-              </div>
-            </div>
-            <div class="field" style="margin-top:8px">
-              <label for="photo-cap-${i}">Caption</label>
-              <input id="photo-cap-${i}" value="${esc(p.caption || '')}" />
-            </div>
-          </div>`).join('')}
-      </div>
 
       <h2 class="section-title" style="margin-top:28px">Score tiers</h2>
       <p class="hint">Guests land on the first tier whose percent range includes their score.</p>
@@ -919,7 +893,7 @@
     const tabs = isNew ? '' : `
       <div class="tabs">
         <button class="tab ${state.tab === 'event' ? 'active' : ''}" data-tab="event">Event</button>
-        <button class="tab ${state.tab === 'quiz' ? 'active' : ''}" data-tab="quiz">Intro &amp; quiz</button>
+        <button class="tab ${state.tab === 'quiz' ? 'active' : ''}" data-tab="quiz">Quiz</button>
         <button class="tab ${state.tab === 'questions' ? 'active' : ''}" data-tab="questions">Questions (${(detail.questions || []).length})</button>
         <button class="tab ${state.tab === 'guestbook' ? 'active' : ''}" data-tab="guestbook">Guest book (${ev.guestbookCount || (detail.guestbook && detail.guestbook.count) || 0})</button>
         <button class="tab ${state.tab === 'scores' ? 'active' : ''}" data-tab="scores">Scores (${ev.scoreCount || (detail.scores && detail.scores.count) || 0})</button>
@@ -1023,7 +997,7 @@
         });
       });
     });
-    bindIntroPreview();
+    bindEventLook();
     const saveEv = document.getElementById('save-event');
     if (saveEv) saveEv.addEventListener('click', () => saveEvent(isNew));
     const occasion = document.getElementById('ev-occasion');
@@ -1071,7 +1045,6 @@
         if (id) {
           const el = document.getElementById(id);
           if (el) el.value = url;
-          if (id.indexOf('photo-src-') === 0) updatePreviewPhoto(Number(id.slice('photo-src-'.length)));
           return;
         }
         const card = btn.closest('.q-card');
@@ -1086,36 +1059,57 @@
     $app.querySelectorAll('.q-card').forEach((card) => bindQuestionCard(card));
   }
 
-  function bindIntroPreview() {
-    const pairs = [
-      ['ecard-greeting', 'preview-greeting', 'Happy Birthday!'],
-      ['ecard-sub', 'preview-sub', 'A short tagline'],
-      ['ecard-message', 'preview-msg', 'Your welcome note appears here.'],
-      ['ecard-btn', 'preview-btn', 'Start the Quiz →'],
-    ];
-    pairs.forEach(([src, dest, fallback]) => {
-      const el = document.getElementById(src);
-      const out = document.getElementById(dest);
-      if (!el || !out) return;
-      el.addEventListener('input', () => { out.textContent = el.value.trim() || fallback; });
-    });
-    for (let i = 0; i < 6; i++) {
-      const src = document.getElementById('photo-src-' + i);
-      const cap = document.getElementById('photo-cap-' + i);
-      if (src) src.addEventListener('input', () => updatePreviewPhoto(i));
-      if (cap) cap.addEventListener('input', () => updatePreviewPhoto(i));
-    }
+  function setPolaroidSrc(i, url) {
+    const hidden = document.getElementById('photo-src-' + i);
+    if (hidden) hidden.value = url || '';
+    const btn = document.querySelector('[data-pick-polaroid="' + i + '"]');
+    if (btn) btn.innerHTML = mediaThumbHtml(url);
+    const fig = btn && btn.closest('.polaroid-edit');
+    if (fig) fig.classList.toggle('has-photo', !!url);
+    const clear = document.querySelector('[data-clear-polaroid="' + i + '"]');
+    if (clear) clear.hidden = !url;
   }
 
-  function updatePreviewPhoto(i) {
-    const fig = document.querySelector('[data-preview-photo="' + i + '"]');
-    if (!fig) return;
-    const src = val('photo-src-' + i);
-    const cap = val('photo-cap-' + i);
-    const box = fig.querySelector('.intro-polaroid-photo');
-    const capEl = fig.querySelector('figcaption');
-    if (box) box.innerHTML = src ? `<img src="${esc(src)}" alt="">` : '';
-    if (capEl) capEl.textContent = cap || ('Photo ' + (i + 1));
+  function setBgImage(url) {
+    const hidden = document.getElementById('ev-bg');
+    if (hidden) hidden.value = url || '';
+    const stage = document.getElementById('look-stage');
+    if (stage) {
+      if (url) {
+        stage.style.backgroundImage = 'linear-gradient(rgba(251,246,239,0.55), rgba(251,246,239,0.72)), url("' + String(url).replace(/"/g, '\\"') + '")';
+        stage.classList.add('has-bg');
+      } else {
+        stage.style.backgroundImage = '';
+        stage.classList.remove('has-bg');
+      }
+    }
+    const clear = document.getElementById('clear-bg');
+    if (clear) clear.hidden = !url;
+  }
+
+  function bindEventLook() {
+    $app.querySelectorAll('[data-pick-polaroid]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        openPicker('image', (url) => setPolaroidSrc(Number(btn.getAttribute('data-pick-polaroid')), url));
+      });
+    });
+    $app.querySelectorAll('[data-clear-polaroid]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setPolaroidSrc(Number(btn.getAttribute('data-clear-polaroid')), '');
+      });
+    });
+    document.getElementById('pick-bg')?.addEventListener('click', () => {
+      openPicker('image', (url) => setBgImage(url));
+    });
+    document.getElementById('clear-bg')?.addEventListener('click', () => setBgImage(''));
+    const name = document.getElementById('ev-name');
+    const desc = document.getElementById('ev-description');
+    const outName = document.getElementById('look-name');
+    const outDesc = document.getElementById('look-desc');
+    if (name && outName) name.addEventListener('input', () => { outName.textContent = name.value.trim() || 'Event name'; });
+    if (desc && outDesc) desc.addEventListener('input', () => { outDesc.textContent = desc.value.trim() || 'Guests see your description here.'; });
   }
 
   function bindTiers() {
@@ -1207,17 +1201,25 @@
       enableGuestbook: val('ev-guestbook'),
       themePreset: val('ev-preset') || 'custom',
       theme: readThemeFromForm(),
+      bgImage: val('ev-bg') || null,
+      photos: [],
     };
+    for (let i = 0; i < 6; i++) {
+      const src = val('photo-src-' + i);
+      const caption = val('photo-cap-' + i);
+      if (src || caption) payload.photos.push({ src, caption });
+    }
     try {
       if (isNew) {
         const created = await api('/events', { method: 'POST', body: JSON.stringify(payload) });
-        toast('Event created. Add photos and questions on the next tabs.');
+        toast('Event created. Add questions on the Quiz tab when you are ready.');
         state.detail = created;
-        state.tab = 'quiz';
+        state.tab = 'event';
         go('/admin/events/' + created.event.id);
       } else {
         const updated = await api('/events/' + state.eventId, { method: 'PUT', body: JSON.stringify(payload) });
         state.detail.event = Object.assign(state.detail.event, updated.event);
+        if (updated.quiz) state.detail.quiz = updated.quiz;
         toast('Event saved');
         renderEditor();
       }
@@ -1225,18 +1227,14 @@
   }
 
   async function saveQuizCopy() {
-    const photos = [];
-    for (let i = 0; i < 6; i++) {
-      const src = val('photo-src-' + i);
-      const caption = val('photo-cap-' + i);
-      if (src || caption) photos.push({ src, caption });
-    }
+    const existing = (state.detail && state.detail.quiz) || {};
+    const ecard = existing.ecard || {};
     const payload = {
       title: val('quiz-title'),
       subtitle: val('quiz-subtitle'),
       honoree: val('quiz-honoree'),
       welcomeMessage: val('quiz-welcome'),
-      heroImage: val('quiz-hero'),
+      heroImage: existing.heroImage || null,
       audio: {
         backgroundMusic: val('audio-bg'),
         correctSound: val('audio-ok'),
@@ -1244,11 +1242,11 @@
         playlist: Array.from(document.querySelectorAll('.playlist-track:checked')).map((el) => el.value),
       },
       ecard: {
-        greeting: val('ecard-greeting'),
-        subGreeting: val('ecard-sub'),
-        message: val('ecard-message'),
-        buttonText: val('ecard-btn'),
-        photos,
+        greeting: ecard.greeting || '',
+        subGreeting: ecard.subGreeting || '',
+        message: ecard.message || '',
+        buttonText: ecard.buttonText || '',
+        photos: Array.isArray(ecard.photos) ? ecard.photos : [],
       },
       scoreTiers: readTiers(),
     };
@@ -1436,13 +1434,13 @@
       }));
       zone.addEventListener('drop', (e) => {
         const file = e.dataTransfer.files && e.dataTransfer.files[0];
-        if (file) uploadFile(kind, file);
+        if (file) uploadFile(kind, file).catch((err) => toast(err.message, 'err'));
       });
     });
     $app.querySelectorAll('[data-upload]').forEach((input) => {
       input.addEventListener('change', () => {
         const file = input.files && input.files[0];
-        if (file) uploadFile(input.getAttribute('data-upload'), file);
+        if (file) uploadFile(input.getAttribute('data-upload'), file).catch((err) => toast(err.message, 'err'));
         input.value = '';
       });
     });
@@ -1473,12 +1471,18 @@
   async function uploadFile(kind, file) {
     const body = new FormData();
     body.append('file', file);
-    try {
-      await api('/media?kind=' + encodeURIComponent(kind), { method: 'POST', body });
-      toast('Uploaded ' + file.name);
-      await loadMedia();
-      if (state.view === 'media') renderMedia();
-    } catch (err) { toast(err.message, 'err'); }
+    const data = await api('/media?kind=' + encodeURIComponent(kind), { method: 'POST', body });
+    toast('Uploaded ' + file.name);
+    await loadMedia();
+    if (state.view === 'media') renderMedia();
+    return data;
+  }
+
+  function pickerThumb(f) {
+    if (/\.(mp4|webm)$/i.test(f.name || f.url || '')) {
+      return `<video src="${esc(f.url)}" muted></video>`;
+    }
+    return `<img src="${esc(f.url)}" alt="" />`;
   }
 
   function openPicker(kind, onPick) {
@@ -1487,14 +1491,15 @@
       <div class="modal-backdrop">
         <div class="modal">
           <div class="page-head">
-            <h2>Choose ${kind === 'music' ? 'MP3' : 'image'}</h2>
+            <h2>Choose ${kind === 'music' ? 'an MP3' : 'a photo'}</h2>
             <button class="btn btn-ghost btn-sm" type="button" id="close-modal">Close</button>
           </div>
+          <p class="hint">Pick from the library, or upload from this computer.</p>
           ${dropzone(kind)}
           <div class="grid" style="gap:8px">
             ${(items || []).map((f) => `
               <button class="picker-item" type="button" data-url="${esc(kind === 'music' ? f.name : f.url)}">
-                ${kind === 'image' ? `<img src="${esc(f.url)}" alt="" />` : ''}
+                ${kind === 'image' ? pickerThumb(f) : ''}
                 <span>${esc(f.name)}</span>
               </button>`).join('') || '<p class="empty">Upload a file first.</p>'}
           </div>
@@ -1509,19 +1514,26 @@
     });
     const zone = $modal.querySelector('.drop');
     const k = zone.getAttribute('data-kind');
+    async function takeFile(file) {
+      if (!file) return;
+      try {
+        const data = await uploadFile(k, file);
+        const picked = kind === 'music' ? (data && data.name) : (data && data.url);
+        if (picked) {
+          onPick(picked);
+          $modal.innerHTML = '';
+          return;
+        }
+      } catch (err) { toast(err.message, 'err'); return; }
+      openPicker(kind, onPick);
+    }
     zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('over'); });
     zone.addEventListener('drop', async (e) => {
       e.preventDefault(); zone.classList.remove('over');
-      const file = e.dataTransfer.files && e.dataTransfer.files[0];
-      if (!file) return;
-      await uploadFile(k, file);
-      openPicker(kind, onPick);
+      await takeFile(e.dataTransfer.files && e.dataTransfer.files[0]);
     });
     $modal.querySelector('[data-upload]').addEventListener('change', async (e) => {
-      const file = e.target.files && e.target.files[0];
-      if (!file) return;
-      await uploadFile(k, file);
-      openPicker(kind, onPick);
+      await takeFile(e.target.files && e.target.files[0]);
     });
   }
 

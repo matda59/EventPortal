@@ -82,17 +82,11 @@
     if ($('home-kicker')) $('home-kicker').textContent = subtitle || '';
     if ($('home-description')) $('home-description').textContent = message || '';
     if ($('home-nav')) $('home-nav').innerHTML = '';
+    applyPageBackground(heroImage);
     const hero = $('home-hero');
     if (hero) {
-      if (heroImage) {
-        hero.src = heroImage;
-        hero.alt = title || '';
-        hero.hidden = false;
-        hero.onerror = () => { hero.hidden = true; };
-      } else {
-        hero.hidden = true;
-        hero.removeAttribute('src');
-      }
+      hero.hidden = true;
+      hero.removeAttribute('src');
     }
     showScreen('home');
   }
@@ -178,6 +172,16 @@
     };
   }
 
+  function applyPageBackground(src) {
+    const url = String(src || '').trim();
+    document.body.classList.toggle('has-page-bg', !!url);
+    if (url) {
+      document.body.style.setProperty('--page-bg-image', 'url("' + url.replace(/"/g, '\\"') + '")');
+    } else {
+      document.body.style.removeProperty('--page-bg-image');
+    }
+  }
+
   function fillChrome(meta) {
     if ($('chrome-emoji')) $('chrome-emoji').textContent = (meta && meta.headerEmoji) || '';
     if ($('chrome-name')) $('chrome-name').textContent = eventLabel();
@@ -227,6 +231,7 @@
     const f    = guestFlags();
     const copy = occasionCopy(meta);
     applyTheme(meta.theme);
+    applyPageBackground(meta.bgImage || meta.heroImage);
     document.title = meta.eventName || meta.title || (f.status === 'ended' ? 'Event ended' : 'Event');
     fillChrome(meta);
     const musicLabel = $('mp3-label');
@@ -274,6 +279,7 @@
     const items = galleryItems(ecard);
 
     fillChrome(meta);
+    applyPageBackground(meta.bgImage || meta.heroImage);
     if ($('home-emoji')) $('home-emoji').textContent = meta.headerEmoji || '';
     if ($('home-name')) $('home-name').textContent = eventLabel();
     if ($('home-kicker')) {
@@ -287,15 +293,8 @@
 
     const hero = $('home-hero');
     if (hero) {
-      if (meta.heroImage) {
-        hero.src = meta.heroImage;
-        hero.alt = meta.honoree ? `Photo of ${meta.honoree}` : eventLabel();
-        hero.hidden = false;
-        hero.onerror = () => { hero.hidden = true; };
-      } else {
-        hero.hidden = true;
-        hero.removeAttribute('src');
-      }
+      hero.hidden = true;
+      hero.removeAttribute('src');
     }
 
     const nav = $('home-nav');
