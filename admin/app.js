@@ -562,7 +562,7 @@
               <input type="checkbox" id="ev-gallery" ${ev.enableGallery !== false ? 'checked' : ''} />
               <span>
                 <strong>Photo &amp; video gallery</strong>
-                <small>Photos and videos from the event home page</small>
+                <small>Guests add their own photos and videos</small>
               </span>
             </label>
             <label class="feature-card">
@@ -1371,7 +1371,7 @@
     const music = (state.media && state.media.music) || [];
     return `
       <h2 class="section-title">This event’s media</h2>
-      <p class="hint">Photos, videos, and music uploaded here belong to this event only. Use them for Polaroids, the page background, question pictures, and the guest playlist.</p>
+      <p class="hint">Guests add photos and videos from the Gallery on the event page. Those show up here so you can remove them. Host uploads are for Polaroids, the page background, question pictures, and the guest playlist.</p>
       <div class="grid grid-2">
         <section>
           <h2 class="section-title">Photos &amp; videos</h2>
@@ -1409,7 +1409,7 @@
           : `<div style="padding:28px 10px;text-align:center;background:#0f172a;color:#fff;font-weight:700">MP3</div>`}
         <div class="body">
           <div class="name">${esc(f.name)}</div>
-          <p class="meta">${esc(f.legacy ? 'Already used on this event' : f.url)}</p>
+          <p class="meta">${esc(f.guest ? ('Guest upload' + (f.guestName ? ' · ' + f.guestName : '')) : (f.legacy ? 'Already used on this event' : f.url))}</p>
           <div class="card-actions">
             <button class="btn btn-ghost btn-sm" data-copy="${esc(kind === 'music' ? f.name : f.url)}">Copy path</button>
             ${f.legacy ? '' : `<button class="btn btn-ghost btn-sm" data-del-media="${esc(kind)}" data-name="${esc(f.name)}">Delete</button>`}

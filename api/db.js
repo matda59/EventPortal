@@ -107,6 +107,19 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_guestbook_event
     ON guestbook_entries(event_id, created_at);
 
+  CREATE TABLE IF NOT EXISTS gallery_uploads (
+    id         TEXT PRIMARY KEY,
+    event_id   TEXT NOT NULL,
+    guest_name TEXT NOT NULL,
+    caption    TEXT,
+    filename   TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_gallery_event
+    ON gallery_uploads(event_id, created_at);
+
   CREATE TABLE IF NOT EXISTS quiz_answers (
     session_id     TEXT NOT NULL,
     question_id    TEXT NOT NULL,

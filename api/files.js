@@ -172,6 +172,73 @@ function removeEventMedia(eventId) {
   fs.rmSync(path.join(MUSIC_DIR, id), { recursive: true, force: true });
 }
 
+async function readLimited(req, limit) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limit) {
+      req.destroy();
+      const err = new Error('File is too large (max 25 MB).');
+      err.status = 400;
+      throw err;
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks, size);
+}
+
+function parseMultipartFile(buffer, contentType) {
+  const m = String(contentType || '').match(/multipart\/form-data\s*;\s*boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (!m) {
+    const err = new Error('Expected multipart form upload.');
+    err.status = 400;
+    throw err;
+  }
+  const boundary = (m[1] || m[2]).trim();
+  const splitter = Buffer.from(`--${boundary}`);
+  const fields = {};
+  let file = null;
+  let offset = 0;
+  while (offset < buffer.length) {
+    const start = buffer.indexOf(splitter, offset);
+    if (start === -1) break;
+    let cursor = start + splitter.length;
+    if (buffer[cursor] === 0x2d && buffer[cursor + 1] === 0x2d) break;
+    if (buffer[cursor] === 0x0d && buffer[cursor + 1] === 0x0a) cursor += 2;
+    const next = buffer.indexOf(splitter, cursor);
+    if (next === -1) break;
+    let part = buffer.subarray(cursor, next);
+    if (part.length >= 2 && part[part.length - 2] === 0x0d && part[part.length - 1] === 0x0a) {
+      part = part.subarray(0, part.length - 2);
+    }
+    const sep = part.indexOf(Buffer.from('\r\n\r\n'));
+    if (sep !== -1) {
+      const header = part.subarray(0, sep).toString('utf8');
+      const body = part.subarray(sep + 4);
+      const fileMatch = header.match(/filename\*=(?:UTF-8''|)([^;\r\n]+)/i)
+        || header.match(/filename="((?:\\.|[^"\\])*)"/i)
+        || header.match(/filename=([^;\r\n]+)/i);
+      const nameMatch = header.match(/name="([^"]+)"/i) || header.match(/name=([^;\r\n]+)/i);
+      const fieldName = nameMatch ? nameMatch[1].trim() : '';
+      let filename = fileMatch ? (fileMatch[1] || '').trim().replace(/^"|"$/g, '').replace(/\\"/g, '"') : '';
+      try { filename = decodeURIComponent(filename); } catch { /* keep raw */ }
+      if (filename) {
+        if (!file) file = { filename: path.basename(filename), buffer: body };
+      } else if (fieldName) {
+        fields[fieldName] = body.toString('utf8');
+      }
+    }
+    offset = next;
+  }
+  if (!file || !file.buffer || !file.buffer.length) {
+    const err = new Error('Choose a file to upload.');
+    err.status = 400;
+    throw err;
+  }
+  return { filename: file.filename, buffer: file.buffer, fields };
+}
+
 module.exports = {
   IMAGES_DIR,
   MUSIC_DIR,
@@ -190,4 +257,6 @@ module.exports = {
   retargetImageUrl,
   copyLegacyMp3,
   removeEventMedia,
+  readLimited,
+  parseMultipartFile,
 };

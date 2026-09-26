@@ -13,6 +13,7 @@ const express = require('express');
 const db        = require('./db');
 const files     = require('./files');
 const guestbook = require('./guestbook');
+const gallery   = require('./gallery');
 
 const COOKIE      = 'ep_admin';
 const COOKIE_MAX  = 60 * 60 * 24 * 14;
@@ -225,64 +226,6 @@ function applyQuizLook(eventId, body) {
   db.prepare('UPDATE quizzes SET hero_image = ?, ecard_json = ? WHERE id = ?')
     .run(hero, JSON.stringify(ecard), quiz.id);
   return quizByEvent(eventId);
-}
-
-async function readLimited(req, limit) {
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > limit) {
-      req.destroy();
-      const err = new Error('File is too large (max 25 MB).');
-      err.status = 400;
-      throw err;
-    }
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks, size);
-}
-
-function parseMultipartFile(buffer, contentType) {
-  const m = String(contentType || '').match(/multipart\/form-data\s*;\s*boundary=(?:"([^"]+)"|([^;]+))/i);
-  if (!m) {
-    const err = new Error('Expected multipart form upload.');
-    err.status = 400;
-    throw err;
-  }
-  const boundary = (m[1] || m[2]).trim();
-  const splitter = Buffer.from(`--${boundary}`);
-  let offset = 0;
-  while (offset < buffer.length) {
-    const start = buffer.indexOf(splitter, offset);
-    if (start === -1) break;
-    let cursor = start + splitter.length;
-    if (buffer[cursor] === 0x2d && buffer[cursor + 1] === 0x2d) break;
-    if (buffer[cursor] === 0x0d && buffer[cursor + 1] === 0x0a) cursor += 2;
-    const next = buffer.indexOf(splitter, cursor);
-    if (next === -1) break;
-    let part = buffer.subarray(cursor, next);
-    if (part.length >= 2 && part[part.length - 2] === 0x0d && part[part.length - 1] === 0x0a) {
-      part = part.subarray(0, part.length - 2);
-    }
-    const sep = part.indexOf(Buffer.from('\r\n\r\n'));
-    if (sep !== -1) {
-      const header = part.subarray(0, sep).toString('utf8');
-      const body   = part.subarray(sep + 4);
-      const fileMatch = header.match(/filename\*=(?:UTF-8''|)([^;\r\n]+)/i)
-        || header.match(/filename="((?:\\.|[^"\\])*)"/i)
-        || header.match(/filename=([^;\r\n]+)/i);
-      if (fileMatch) {
-        let filename = (fileMatch[1] || '').trim().replace(/^"|"$/g, '').replace(/\\"/g, '"');
-        try { filename = decodeURIComponent(filename); } catch { /* keep raw */ }
-        if (filename) return { filename: path.basename(filename), buffer: body };
-      }
-    }
-    offset = next;
-  }
-  const err = new Error('Choose a file to upload.');
-  err.status = 400;
-  throw err;
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -541,6 +484,7 @@ router.post('/events/:id/duplicate', (req, res) => {
     } else {
       ensureQuiz(newId, name);
     }
+    gallery.copy(event.id, newId);
   });
   tx();
 
@@ -831,6 +775,12 @@ async function eventMediaList(event) {
   ]);
   const imageNames = new Set(images.map((f) => f.name));
   const musicNames = new Set(music.map((f) => f.name));
+  const guestNames = gallery.namesFor(id);
+  for (const file of images) {
+    if (!guestNames.has(file.name)) continue;
+    file.guest = true;
+    file.guestName = guestNames.get(file.name) || '';
+  }
   for (const file of legacyImages) {
     if (imageNames.has(file.name) || !refs.images.has(file.name)) continue;
     images.push({ ...file, legacy: true });
@@ -857,8 +807,8 @@ router.post('/events/:id/media', async (req, res) => {
   try {
     const event = eventById(req.params.id);
     if (!event) return res.status(404).json({ error: 'Event not found.' });
-    const raw = await readLimited(req, MAX_UPLOAD);
-    const parsed = parseMultipartFile(raw, req.headers['content-type']);
+    const raw = await files.readLimited(req, MAX_UPLOAD);
+    const parsed = files.parseMultipartFile(raw, req.headers['content-type']);
     const kind = req.query.kind === 'music' ? 'music' : 'image';
     const ext = path.extname(parsed.filename).toLowerCase();
     if (kind === 'music' && ext !== '.mp3') {
@@ -899,6 +849,7 @@ router.delete('/events/:id/media/:kind/:filename', async (req, res) => {
   }
   try {
     await fsp.unlink(path.join(dir, name));
+    if (kind === 'image') gallery.removeByFilename(event.id, name);
     res.json({ ok: true });
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'File not found.' });

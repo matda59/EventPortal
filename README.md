@@ -37,7 +37,7 @@ docker run -d \
   'ghcr.io/matda59/event-portal:latest'
 ```
 
-Photos and music for each event are stored in folders inside those volumes (`images/<event id>/` and `music/<event id>/`). Upload them from the event’s Media tab in `/admin`.
+Photos and music for each event are stored in folders inside those volumes (`images/<event id>/` and `music/<event id>/`). Guests add their own photos and videos from the Gallery on the event page. Hosts can still upload from the event’s Media tab in `/admin`, and can remove guest uploads there.
 
 After a pull, confirm the new image with `http://<unraid>:4546/api/version` — `sha` should match the latest GitHub commit. Container logs also print `Build → <sha>`.
 

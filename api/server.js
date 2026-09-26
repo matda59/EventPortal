@@ -10,6 +10,7 @@ const db      = require('./db');
 const admin = require('./admin');
 const files = require('./files');
 const guestbook = require('./guestbook');
+const gallery = require('./gallery');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -134,6 +135,7 @@ const limitSessions = rateLimit({ windowMs: 10 * 60 * 1000, max: 80 });
 const limitAnswers  = rateLimit({ windowMs: 10 * 60 * 1000, max: 240 });
 const limitScores   = rateLimit({ windowMs: 10 * 60 * 1000, max: 60 });
 const limitGuestbook = rateLimit({ windowMs: 10 * 60 * 1000, max: 30 });
+const limitGallery = rateLimit({ windowMs: 10 * 60 * 1000, max: 20 });
 
 function readPlayerName(value) {
   if (typeof value !== 'string') return null;
@@ -497,6 +499,101 @@ app.get('/api/events/:slug/guestbook', (req, res) => {
   } catch (err) {
     console.error('GET guestbook:', err);
     res.status(500).json({ error: 'Unable to read guest book.' });
+  }
+});
+
+function galleryEnabled(event) {
+  return event.enable_gallery == null ? true : !!event.enable_gallery;
+}
+
+function hostGalleryItems(event) {
+  const quiz = quizForEvent(event.id);
+  const ecard = parseJson(quiz?.ecard_json, {});
+  const photos = Array.isArray(ecard.photos) ? ecard.photos : [];
+  return photos.filter((p) => p && p.src).map((p) => ({
+    src: p.src,
+    caption: p.caption || '',
+    name: '',
+    guest: false,
+  }));
+}
+
+async function galleryPayload(event) {
+  const guests = [];
+  const seen = new Set();
+  for (const row of gallery.list(event.id)) {
+    const name = files.safeFileName(row.filename);
+    if (!name || !files.IMAGE_RE.test(name)) continue;
+    const dir = files.eventMediaDir('image', event.id);
+    if (!dir) continue;
+    try {
+      const st = await fsp.stat(path.join(dir, name));
+      if (!st.isFile()) continue;
+    } catch {
+      continue;
+    }
+    const src = `/images/${event.id}/${encodeURIComponent(name)}`;
+    seen.add(src);
+    guests.push({
+      src,
+      caption: row.caption || '',
+      name: row.guest_name || '',
+      guest: true,
+    });
+  }
+  const hosts = hostGalleryItems(event).filter((item) => item.src && !seen.has(item.src));
+  return { items: guests.concat(hosts) };
+}
+
+app.get('/api/events/:slug/gallery', async (req, res) => {
+  try {
+    const event = findActiveEvent(req.params.slug);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    if (!galleryEnabled(event)) return res.status(403).json({ error: 'Gallery is not enabled.' });
+    res.json(await galleryPayload(event));
+  } catch (err) {
+    console.error('GET gallery:', err);
+    res.status(500).json({ error: 'Unable to read gallery.' });
+  }
+});
+
+app.post('/api/events/:slug/gallery', limitGallery, async (req, res) => {
+  let written = null;
+  try {
+    const event = findActiveEvent(req.params.slug);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    if (!galleryEnabled(event)) return res.status(403).json({ error: 'Gallery is not enabled.' });
+    if (gallery.count(event.id) >= gallery.MAX_ENTRIES) {
+      return res.status(400).json({ error: 'This gallery is full.' });
+    }
+
+    const raw = await files.readLimited(req, 25 * 1024 * 1024);
+    const parsed = files.parseMultipartFile(raw, req.headers['content-type']);
+    const name = readPlayerName(parsed.fields && parsed.fields.name);
+    if (!name) return res.status(400).json({ error: 'Please enter your name.' });
+    const caption = typeof parsed.fields?.caption === 'string'
+      ? parsed.fields.caption.trim().slice(0, 80)
+      : '';
+    const ext = path.extname(parsed.filename).toLowerCase();
+    if (!files.IMAGE_EXTS.has(ext)) {
+      return res.status(400).json({ error: 'Photos and videos must be jpg, png, gif, webp, mp4, or webm.' });
+    }
+
+    const dir = files.eventMediaDir('image', event.id);
+    if (!dir) return res.status(400).json({ error: 'Invalid event.' });
+    await fsp.mkdir(dir, { recursive: true });
+    const filename = files.uniqueFilename(dir, parsed.filename);
+    written = path.join(dir, filename);
+    await fsp.writeFile(written, parsed.buffer);
+    gallery.add(uid(), event.id, name, caption, filename);
+    written = null;
+    res.status(201).json(await galleryPayload(event));
+  } catch (err) {
+    if (written) await fsp.unlink(written).catch(() => {});
+    const status = err.status || 500;
+    if (status >= 500) console.error('POST gallery:', err);
+    const message = status >= 500 ? 'Unable to save gallery upload.' : (err.message || 'Upload failed.');
+    res.status(status).json({ error: message });
   }
 });
 
