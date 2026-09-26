@@ -8,6 +8,9 @@ const cors    = require('cors');
 const db      = require('./db');
 
 const admin = require('./admin');
+const files = require('./files');
+const guestbook = require('./guestbook');
+const gallery = require('./gallery');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -132,6 +135,7 @@ const limitSessions = rateLimit({ windowMs: 10 * 60 * 1000, max: 80 });
 const limitAnswers  = rateLimit({ windowMs: 10 * 60 * 1000, max: 240 });
 const limitScores   = rateLimit({ windowMs: 10 * 60 * 1000, max: 60 });
 const limitGuestbook = rateLimit({ windowMs: 10 * 60 * 1000, max: 30 });
+const limitGallery = rateLimit({ windowMs: 10 * 60 * 1000, max: 20 });
 
 function readPlayerName(value) {
   if (typeof value !== 'string') return null;
@@ -180,13 +184,25 @@ function eventPlaylistNames(quiz) {
   return names;
 }
 
-async function listExistingMp3s(names) {
+function presentAudio(eventId, audio) {
+  const src = (audio && typeof audio === 'object') ? audio : {};
+  const playlist = Array.isArray(src.playlist) ? src.playlist : [];
+  return {
+    backgroundMusic: files.presentClip(eventId, src.backgroundMusic || ''),
+    correctSound: files.presentClip(eventId, src.correctSound || ''),
+    wrongSound: files.presentClip(eventId, src.wrongSound || ''),
+    playlist: playlist.map((name) => files.presentClip(eventId, name)).filter(Boolean),
+  };
+}
+
+function listExistingMp3s(eventId, names) {
   const out = [];
+  const seen = new Set();
   for (const name of names) {
-    try {
-      const st = await fsp.stat(path.join(MUSIC_DIR, name));
-      if (st.isFile()) out.push(name);
-    } catch { /* missing file */ }
+    const url = files.resolveMp3Url(eventId, name);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    out.push(url);
   }
   return out;
 }
@@ -280,7 +296,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
         theme:          normalizeTheme(parseJson(event.theme_json || quiz?.theme_json, {})),
       },
       ecard:      parseJson(quiz?.ecard_json, {}),
-      audio:      parseJson(quiz?.audio_json, {}),
+      audio:      presentAudio(event.id, parseJson(quiz?.audio_json, {})),
       scoreTiers: parseJson(quiz?.score_tiers_json, []),
       questions:  event.enable_quiz ? questions.map((q) => ({
         id:          q.id,
@@ -290,7 +306,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
         image:       q.image_url || null,
         options:     parseJson(q.options_json, []),
         funFact:     q.fun_fact   || null,
-        audioClip:   q.audio_clip || null,
+        audioClip:   files.presentClip(event.id, q.audio_clip || null),
       })) : [],
       flags: {
         enableQuiz:        !!event.enable_quiz,
@@ -465,39 +481,119 @@ app.get('/api/events/:slug/music', async (req, res) => {
     if (!event) return res.status(404).json({ error: 'Event not found.' });
     if (event.enable_music === 0) return res.json([]);
     const quiz = quizForEvent(event.id);
-    res.json(await listExistingMp3s(eventPlaylistNames(quiz)));
+    res.json(listExistingMp3s(event.id, eventPlaylistNames(quiz)));
   } catch (err) {
     console.error('GET music:', err);
     res.json([]);
   }
 });
 
-const GUESTBOOK_MAX = 200;
 const GUESTBOOK_MSG_MAX = 280;
-
-function serializeGuestbook(rows) {
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.guest_name,
-    message: r.message,
-    createdAt: r.created_at,
-  }));
-}
 
 app.get('/api/events/:slug/guestbook', (req, res) => {
   try {
     const event = findActiveEvent(req.params.slug);
     if (!event) return res.status(404).json({ error: 'Event not found.' });
     if (!event.enable_guestbook) return res.status(403).json({ error: 'Guest book is not enabled.' });
-    const rows = db.prepare(`
-      SELECT id, guest_name, message, created_at
-      FROM guestbook_entries WHERE event_id = ?
-      ORDER BY created_at DESC LIMIT ?
-    `).all(event.id, GUESTBOOK_MAX);
-    res.json({ entries: serializeGuestbook(rows) });
+    res.json({ entries: guestbook.serialize(guestbook.list(event.id)) });
   } catch (err) {
     console.error('GET guestbook:', err);
     res.status(500).json({ error: 'Unable to read guest book.' });
+  }
+});
+
+function galleryEnabled(event) {
+  return event.enable_gallery == null ? true : !!event.enable_gallery;
+}
+
+function hostGalleryItems(event) {
+  const quiz = quizForEvent(event.id);
+  const ecard = parseJson(quiz?.ecard_json, {});
+  const photos = Array.isArray(ecard.photos) ? ecard.photos : [];
+  return photos.filter((p) => p && p.src).map((p) => ({
+    src: p.src,
+    caption: p.caption || '',
+    name: '',
+    guest: false,
+  }));
+}
+
+async function galleryPayload(event) {
+  const guests = [];
+  const seen = new Set();
+  for (const row of gallery.list(event.id)) {
+    const name = files.safeFileName(row.filename);
+    if (!name || !files.IMAGE_RE.test(name)) continue;
+    const dir = files.eventMediaDir('image', event.id);
+    if (!dir) continue;
+    try {
+      const st = await fsp.stat(path.join(dir, name));
+      if (!st.isFile()) continue;
+    } catch {
+      continue;
+    }
+    const src = `/images/${event.id}/${encodeURIComponent(name)}`;
+    seen.add(src);
+    guests.push({
+      src,
+      caption: row.caption || '',
+      name: row.guest_name || '',
+      guest: true,
+    });
+  }
+  const hosts = hostGalleryItems(event).filter((item) => item.src && !seen.has(item.src));
+  return { items: guests.concat(hosts) };
+}
+
+app.get('/api/events/:slug/gallery', async (req, res) => {
+  try {
+    const event = findActiveEvent(req.params.slug);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    if (!galleryEnabled(event)) return res.status(403).json({ error: 'Gallery is not enabled.' });
+    res.json(await galleryPayload(event));
+  } catch (err) {
+    console.error('GET gallery:', err);
+    res.status(500).json({ error: 'Unable to read gallery.' });
+  }
+});
+
+app.post('/api/events/:slug/gallery', limitGallery, async (req, res) => {
+  let written = null;
+  try {
+    const event = findActiveEvent(req.params.slug);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    if (!galleryEnabled(event)) return res.status(403).json({ error: 'Gallery is not enabled.' });
+    if (gallery.count(event.id) >= gallery.MAX_ENTRIES) {
+      return res.status(400).json({ error: 'This gallery is full.' });
+    }
+
+    const raw = await files.readLimited(req, 25 * 1024 * 1024);
+    const parsed = files.parseMultipartFile(raw, req.headers['content-type']);
+    const name = readPlayerName(parsed.fields && parsed.fields.name);
+    if (!name) return res.status(400).json({ error: 'Please enter your name.' });
+    const caption = typeof parsed.fields?.caption === 'string'
+      ? parsed.fields.caption.trim().slice(0, 80)
+      : '';
+    const ext = path.extname(parsed.filename).toLowerCase();
+    if (!files.IMAGE_EXTS.has(ext)) {
+      return res.status(400).json({ error: 'Photos and videos must be jpg, png, gif, webp, mp4, or webm.' });
+    }
+
+    const dir = files.eventMediaDir('image', event.id);
+    if (!dir) return res.status(400).json({ error: 'Invalid event.' });
+    await fsp.mkdir(dir, { recursive: true });
+    const filename = files.uniqueFilename(dir, parsed.filename);
+    written = path.join(dir, filename);
+    await fsp.writeFile(written, parsed.buffer);
+    gallery.add(uid(), event.id, name, caption, filename);
+    written = null;
+    res.status(201).json(await galleryPayload(event));
+  } catch (err) {
+    if (written) await fsp.unlink(written).catch(() => {});
+    const status = err.status || 500;
+    if (status >= 500) console.error('POST gallery:', err);
+    const message = status >= 500 ? 'Unable to save gallery upload.' : (err.message || 'Upload failed.');
+    res.status(status).json({ error: message });
   }
 });
 
@@ -512,17 +608,8 @@ app.post('/api/events/:slug/guestbook', limitGuestbook, (req, res) => {
     const message = typeof req.body?.message === 'string' ? req.body.message.trim().slice(0, GUESTBOOK_MSG_MAX) : '';
     if (!message) return res.status(400).json({ error: 'Please write a short message.' });
 
-    db.prepare(`
-      INSERT INTO guestbook_entries (id, event_id, guest_name, message)
-      VALUES (?, ?, ?, ?)
-    `).run(uid(), event.id, name, message);
-
-    const rows = db.prepare(`
-      SELECT id, guest_name, message, created_at
-      FROM guestbook_entries WHERE event_id = ?
-      ORDER BY created_at DESC LIMIT ?
-    `).all(event.id, GUESTBOOK_MAX);
-    res.status(201).json({ entries: serializeGuestbook(rows) });
+    guestbook.add(uid(), event.id, name, message);
+    res.status(201).json({ entries: guestbook.serialize(guestbook.list(event.id)) });
   } catch (err) {
     console.error('POST guestbook:', err);
     res.status(500).json({ error: 'Unable to save guest book entry.' });

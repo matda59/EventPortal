@@ -68,7 +68,20 @@
 
     <section id="screen-gallery" class="screen card">
       <h1 class="title">Gallery</h1>
-      <p class="lead">Photos and clips from the event.</p>
+      <p class="lead">Add a photo or video from the event. Everyone at the party can see it here.</p>
+      <form id="gallery-form" class="name-form gallery-form" novalidate>
+        <label for="gallery-name" class="field-label">Your name</label>
+        <input id="gallery-name" class="text-input" type="text" maxlength="30"
+               placeholder="Enter your name…" autocomplete="name" />
+        <label for="gallery-caption" class="field-label" style="margin-top:14px">Caption <span class="optional">(optional)</span></label>
+        <input id="gallery-caption" class="text-input" type="text" maxlength="80"
+               placeholder="A few words about this moment…" />
+        <label for="gallery-file" class="field-label" style="margin-top:14px">Photo or video</label>
+        <input id="gallery-file" class="file-input" type="file"
+               accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,.jpg,.jpeg,.png,.gif,.webp,.mp4,.webm" />
+        <p id="gallery-error" class="error-text" role="alert" hidden></p>
+        <button type="submit" class="btn btn-primary btn-block" id="gallery-submit">Add to gallery</button>
+      </form>
       <div id="gallery-grid" class="gallery-grid"></div>
     </section>
 

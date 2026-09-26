@@ -16,6 +16,7 @@
   const SESSIONS_URL = `/api/events/${EVENT_SLUG}/sessions`;
   const MUSIC_URL    = `/api/events/${EVENT_SLUG}/music`;
   const GUESTBOOK_URL = `/api/events/${EVENT_SLUG}/guestbook`;
+  const GALLERY_URL = `/api/events/${EVENT_SLUG}/gallery`;
 
   // ── App state ──────────────────────────────────────────────────────
   const state = {
@@ -28,6 +29,8 @@
     grading: false,
     playerName: '',
     sessionId: null,
+    galleryName: '',
+    galleryItems: null,
   };
 
   // ── Element cache ──────────────────────────────────────────────────
@@ -291,6 +294,9 @@
     applyGuestFlags();
     setupMp3Player();
     wireEvents();
+    if (guestFlags().enableGallery) {
+      try { await loadGalleryItems(); } catch { state.galleryItems = null; }
+    }
     renderHome();
     showScreen('home');
   }
@@ -345,13 +351,14 @@
       });
     }
     if (f.enableGallery) {
+      const count = Array.isArray(state.galleryItems) ? state.galleryItems.length : items.length;
       tiles.push({
         id: 'gallery',
         emoji: '📷',
         title: 'Gallery',
-        hint: items.length
-          ? `${items.length} photo${items.length === 1 ? '' : 's'} & clips`
-          : 'Photos and videos',
+        hint: count
+          ? `${count} photo${count === 1 ? '' : 's'} & clips · add yours`
+          : 'Add a photo or video',
       });
     }
     if (f.enableLeaderboard) {
@@ -399,24 +406,105 @@
     if (guestFlags().enableQuiz) setTimeout(() => $('player-name') && $('player-name').focus(), 300);
   }
 
-  function openGallery() {
-    const items = galleryItems((state.config && state.config.ecard) || {});
+  function galleryCaption(item) {
+    const name = item.name ? escHtml(item.name) : '';
+    const cap = item.caption ? escHtml(item.caption) : '';
+    if (name && cap) return `<figcaption><strong>${name}</strong> ${cap}</figcaption>`;
+    if (name) return `<figcaption><strong>${name}</strong></figcaption>`;
+    if (cap) return `<figcaption>${cap}</figcaption>`;
+    return '';
+  }
+
+  function renderGalleryGrid(items) {
     const grid = $('gallery-grid');
-    if (grid) {
-      if (!items.length) {
-        grid.innerHTML = '<p class="hof-empty">No photos or videos yet.</p>';
-      } else {
-        grid.innerHTML = items.map((p) => {
-          const src = escHtml(p.src);
-          const cap = p.caption ? escHtml(p.caption) : '';
-          const media = isVideoSrc(p.src)
-            ? `<video src="${src}" controls playsinline></video>`
-            : `<img src="${src}" alt="${cap}" />`;
-          return `<figure class="gallery-item">${media}${cap ? `<figcaption>${cap}</figcaption>` : ''}</figure>`;
-        }).join('');
+    if (!grid) return;
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) {
+      grid.innerHTML = '<p class="hof-empty">No photos or videos yet. Add the first one.</p>';
+      return;
+    }
+    grid.innerHTML = list.map((p) => {
+      const src = escHtml(p.src);
+      const media = isVideoSrc(p.src)
+        ? `<video src="${src}" controls playsinline></video>`
+        : `<img src="${src}" alt="${escHtml(p.caption || p.name || '')}" />`;
+      return `<figure class="gallery-item">${media}${galleryCaption(p)}</figure>`;
+    }).join('');
+  }
+
+  async function loadGalleryItems() {
+    if (!guestFlags().enableGallery) {
+      state.galleryItems = [];
+      return [];
+    }
+    const data = await apiJson(GALLERY_URL);
+    state.galleryItems = Array.isArray(data.items) ? data.items : [];
+    return state.galleryItems;
+  }
+
+  async function openGallery() {
+    const errEl = $('gallery-error');
+    if (errEl) errEl.hidden = true;
+    if (state.galleryName && $('gallery-name')) $('gallery-name').value = state.galleryName;
+    showScreen('gallery');
+    const grid = $('gallery-grid');
+    if (grid && !state.galleryItems) grid.innerHTML = '<p class="hof-empty">Loading…</p>';
+    else renderGalleryGrid(state.galleryItems || []);
+    try {
+      renderGalleryGrid(await loadGalleryItems());
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = err.message || 'Unable to read gallery.';
+        errEl.hidden = false;
       }
     }
-    showScreen('gallery');
+  }
+
+  async function onGallerySubmit(e) {
+    e.preventDefault();
+    const errEl = $('gallery-error');
+    const btn = $('gallery-submit');
+    const name = $('gallery-name').value.trim();
+    const caption = $('gallery-caption').value.trim();
+    const file = $('gallery-file').files && $('gallery-file').files[0];
+    if (!name) {
+      errEl.textContent = 'Please enter your name.';
+      errEl.hidden = false;
+      $('gallery-name').focus();
+      return;
+    }
+    if (!file) {
+      errEl.textContent = 'Choose a photo or video.';
+      errEl.hidden = false;
+      return;
+    }
+    const body = new FormData();
+    body.append('name', name);
+    body.append('caption', caption);
+    body.append('file', file);
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Uploading…';
+    }
+    try {
+      const data = await apiJson(GALLERY_URL, { method: 'POST', body });
+      state.galleryName = name;
+      state.galleryItems = Array.isArray(data.items) ? data.items : [];
+      $('gallery-caption').value = '';
+      $('gallery-file').value = '';
+      if (errEl) errEl.hidden = true;
+      renderGalleryGrid(state.galleryItems);
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = err.message || 'Unable to save gallery upload.';
+        errEl.hidden = false;
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Add to gallery';
+      }
+    }
   }
 
   async function openHof() {
@@ -436,6 +524,7 @@
     $('nav-home')?.addEventListener('click', goHome);
     $('results-home')?.addEventListener('click', goHome);
     $('guestbook-form')?.addEventListener('submit', onGuestbookSubmit);
+    $('gallery-form')?.addEventListener('submit', onGallerySubmit);
 
     $('name-form').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -482,6 +571,8 @@
       : 'Leave a short note for the hosts.';
     if (state.guestbookName) $('guestbook-name').value = state.guestbookName;
     showScreen('guestbook');
+    const errEl = $('guestbook-error');
+    if (errEl) errEl.hidden = true;
     try {
       const data = await apiJson(GUESTBOOK_URL);
       renderGuestbookList(data.entries);
@@ -765,8 +856,15 @@
   const mp3 = { tracks: [], index: 0, playing: false, volume: 0.3, audio: null, open: true };
 
   function mp3TrackUrl(name) {
-    if (/^(https?:)?\//.test(name)) return name;
-    return '/music/' + encodeURIComponent(name);
+    const value = String(name || '');
+    if (/^(https?:)?\//.test(value)) return value;
+    return '/music/' + encodeURIComponent(value);
+  }
+
+  function mp3Label(src) {
+    let base = String(src || '').split('/').pop() || 'Track';
+    try { base = decodeURIComponent(base); } catch { /* keep */ }
+    return base.replace(/\.mp3$/i, '').replace(/[_-]+/g, ' ') || 'Track';
   }
 
   async function setupMp3Player() {
@@ -779,7 +877,7 @@
       const res  = await fetch(MUSIC_URL);
       const files = res.ok ? await res.json() : [];
       mp3.tracks  = files.map((f) => ({
-        name: f.replace(/\.mp3$/i, '').replace(/[_-]+/g, ' '),
+        name: mp3Label(f),
         url:  mp3TrackUrl(f),
       }));
     } catch { mp3.tracks = []; }

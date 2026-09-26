@@ -353,6 +353,15 @@ body.has-page-bg .site-chrome {
 .home-tile-title { font-weight: 800; color: var(--text-dark); font-size: 1.05rem; }
 .home-tile-hint { font-size: 0.88rem; color: var(--text-muted); line-height: 1.35; }
 
+.optional { font-weight: 600; color: var(--text-muted); }
+.gallery-form { margin-bottom: 22px; }
+.file-input {
+  display: block;
+  width: 100%;
+  margin: 0 0 16px;
+  font: inherit;
+  color: var(--text-dark);
+}
 .gallery-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
