@@ -10,20 +10,16 @@ const fs      = require('fs');
 const fsp     = require('fs/promises');
 const crypto  = require('crypto');
 const express = require('express');
-const db      = require('./db');
+const db        = require('./db');
+const files     = require('./files');
+const guestbook = require('./guestbook');
+const gallery   = require('./gallery');
 
 const COOKIE      = 'ep_admin';
 const COOKIE_MAX  = 60 * 60 * 24 * 14;
-const PUBLIC_DIR  = path.join(__dirname, '..', 'public');
-const IMAGES_DIR  = path.join(PUBLIC_DIR, 'images');
-const MUSIC_DIR   = path.join(PUBLIC_DIR, 'music');
-const IMAGE_EXTS  = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm']);
 const SLUG_RE     = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const STATUSES    = new Set(['active', 'draft', 'ended']);
 const MAX_UPLOAD  = 25 * 1024 * 1024;
-
-fs.mkdirSync(IMAGES_DIR, { recursive: true });
-fs.mkdirSync(MUSIC_DIR,  { recursive: true });
 
 const router = express.Router();
 router.use(express.json({ limit: '1mb' }));
@@ -232,112 +228,6 @@ function applyQuizLook(eventId, body) {
   return quizByEvent(eventId);
 }
 
-function uniqueFilename(dir, original) {
-  const ext  = path.extname(original).toLowerCase();
-  const base = path.basename(original, ext)
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80) || 'file';
-  let name = `${base}${ext}`;
-  let n = 2;
-  while (fs.existsSync(path.join(dir, name))) {
-    name = `${base}-${n}${ext}`;
-    n += 1;
-  }
-  return name;
-}
-
-function mediaPath(kind, filename) {
-  const dir  = kind === 'music' ? MUSIC_DIR : IMAGES_DIR;
-  const base = path.basename(String(filename || ''));
-  if (!base || base !== String(filename) || base.includes('..')) return null;
-  const full = path.resolve(dir, base);
-  const root = path.resolve(dir);
-  if (full !== root && !full.startsWith(root + path.sep)) return null;
-  return { dir, base, full, kind };
-}
-
-async function readLimited(req, limit) {
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > limit) {
-      req.destroy();
-      const err = new Error('File is too large (max 25 MB).');
-      err.status = 400;
-      throw err;
-    }
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks, size);
-}
-
-function parseMultipartFile(buffer, contentType) {
-  const m = String(contentType || '').match(/multipart\/form-data\s*;\s*boundary=(?:"([^"]+)"|([^;]+))/i);
-  if (!m) {
-    const err = new Error('Expected multipart form upload.');
-    err.status = 400;
-    throw err;
-  }
-  const boundary = (m[1] || m[2]).trim();
-  const splitter = Buffer.from(`--${boundary}`);
-  let offset = 0;
-  while (offset < buffer.length) {
-    const start = buffer.indexOf(splitter, offset);
-    if (start === -1) break;
-    let cursor = start + splitter.length;
-    if (buffer[cursor] === 0x2d && buffer[cursor + 1] === 0x2d) break;
-    if (buffer[cursor] === 0x0d && buffer[cursor + 1] === 0x0a) cursor += 2;
-    const next = buffer.indexOf(splitter, cursor);
-    if (next === -1) break;
-    let part = buffer.subarray(cursor, next);
-    if (part.length >= 2 && part[part.length - 2] === 0x0d && part[part.length - 1] === 0x0a) {
-      part = part.subarray(0, part.length - 2);
-    }
-    const sep = part.indexOf(Buffer.from('\r\n\r\n'));
-    if (sep !== -1) {
-      const header = part.subarray(0, sep).toString('utf8');
-      const body   = part.subarray(sep + 4);
-      const fileMatch = header.match(/filename\*=(?:UTF-8''|)([^;\r\n]+)/i)
-        || header.match(/filename="((?:\\.|[^"\\])*)"/i)
-        || header.match(/filename=([^;\r\n]+)/i);
-      if (fileMatch) {
-        let filename = (fileMatch[1] || '').trim().replace(/^"|"$/g, '').replace(/\\"/g, '"');
-        try { filename = decodeURIComponent(filename); } catch { /* keep raw */ }
-        if (filename) return { filename: path.basename(filename), buffer: body };
-      }
-    }
-    offset = next;
-  }
-  const err = new Error('Choose a file to upload.');
-  err.status = 400;
-  throw err;
-}
-
-async function listMedia(dir, urlPrefix, extRe) {
-  let names = [];
-  try { names = await fsp.readdir(dir); }
-  catch { return []; }
-  const out = [];
-  for (const name of names) {
-    if (!extRe.test(name)) continue;
-    const full = path.join(dir, name);
-    let st;
-    try { st = await fsp.stat(full); }
-    catch { continue; }
-    if (!st.isFile()) continue;
-    out.push({
-      name,
-      url:   `${urlPrefix}/${encodeURIComponent(name)}`,
-      size:  st.size,
-      mtime: st.mtime.toISOString(),
-    });
-  }
-  out.sort((a, b) => b.mtime.localeCompare(a.mtime));
-  return out;
-}
-
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
 router.post('/login', (req, res) => {
@@ -510,6 +400,7 @@ router.delete('/events/:id', (req, res) => {
   const event = eventById(req.params.id);
   if (!event) return res.status(404).json({ error: 'Event not found.' });
   db.prepare('DELETE FROM events WHERE id = ?').run(event.id);
+  files.removeEventMedia(event.id);
   res.json({ ok: true });
 });
 
@@ -535,12 +426,18 @@ router.post('/events/:id/duplicate', (req, res) => {
   const slug  = uniqueCopySlug(event.slug);
   const name  = / \(copy(?: \d+)?\)$/.test(event.name) ? `${event.name.replace(/ \(copy(?: \d+)?\)$/, '')} (copy)` : `${event.name} (copy)`;
 
+  files.copyEventMedia(event.id, newId);
+  const audioForCopy = quiz ? parseJson(quiz.audio_json, {}) : {};
+  [audioForCopy.backgroundMusic, audioForCopy.correctSound, audioForCopy.wrongSound]
+    .concat(Array.isArray(audioForCopy.playlist) ? audioForCopy.playlist : [])
+    .forEach((track) => files.copyLegacyMp3(track, newId));
+
   const tx = db.transaction(() => {
     db.prepare(`
       INSERT INTO events
         (id, slug, name, description, occasion_type, event_date, status, theme_preset, theme_json,
          header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music, enable_guestbook)
-      VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       newId, slug, name, event.description || '',
       event.occasion_type, event.event_date,
@@ -554,14 +451,22 @@ router.post('/events/:id/duplicate', (req, res) => {
 
     const qid = uid();
     if (quiz) {
+      const ecardCopy = parseJson(quiz.ecard_json, {});
+      if (Array.isArray(ecardCopy.photos)) {
+        ecardCopy.photos = ecardCopy.photos.map((p) => ({
+          ...p,
+          src: files.retargetImageUrl(p && p.src, event.id, newId),
+        }));
+      }
       db.prepare(`
         INSERT INTO quizzes
           (id, event_id, title, subtitle, honoree, welcome_message, hero_image,
            audio_json, score_tiers_json, ecard_json, theme_json)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        qid, newId, quiz.title, quiz.subtitle, quiz.honoree, quiz.welcome_message, quiz.hero_image,
-        quiz.audio_json, quiz.score_tiers_json, quiz.ecard_json, quiz.theme_json,
+        qid, newId, quiz.title, quiz.subtitle, quiz.honoree, quiz.welcome_message,
+        files.retargetImageUrl(quiz.hero_image, event.id, newId),
+        quiz.audio_json, quiz.score_tiers_json, JSON.stringify(ecardCopy), quiz.theme_json,
       );
       const ins = db.prepare(`
         INSERT INTO quiz_questions
@@ -571,13 +476,15 @@ router.post('/events/:id/duplicate', (req, res) => {
       `);
       for (const q of questions) {
         ins.run(
-          uid(), qid, q.sort_order, q.submitted_by, q.question_type, q.question, q.image_url,
+          uid(), qid, q.sort_order, q.submitted_by, q.question_type, q.question,
+          files.retargetImageUrl(q.image_url, event.id, newId),
           q.options_json, q.correct_index, q.fun_fact, q.audio_clip,
         );
       }
     } else {
       ensureQuiz(newId, name);
     }
+    gallery.copy(event.id, newId);
   });
   tx();
 
@@ -621,31 +528,28 @@ router.delete('/events/:id/scores', (req, res) => {
 });
 
 router.get('/events/:id/guestbook', (req, res) => {
-  const event = eventById(req.params.id);
-  if (!event) return res.status(404).json({ error: 'Event not found.' });
-  const rows = db.prepare(`
-    SELECT id, guest_name, message, created_at
-    FROM guestbook_entries WHERE event_id = ? ORDER BY created_at DESC
-  `).all(event.id);
-  res.json({
-    count: rows.length,
-    entries: rows.map((r) => ({
-      id: r.id,
-      name: r.guest_name,
-      message: r.message,
-      createdAt: r.created_at,
-    })),
-  });
+  try {
+    const event = eventById(req.params.id);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    const entries = guestbook.serialize(guestbook.list(event.id));
+    res.json({ count: entries.length, entries });
+  } catch (err) {
+    console.error('GET admin guestbook:', err);
+    res.status(500).json({ error: 'Unable to read guest book.' });
+  }
 });
 
 router.delete('/events/:id/guestbook/:entryId', (req, res) => {
-  const event = eventById(req.params.id);
-  if (!event) return res.status(404).json({ error: 'Event not found.' });
-  const info = db.prepare(
-    'DELETE FROM guestbook_entries WHERE id = ? AND event_id = ?'
-  ).run(req.params.entryId, event.id);
-  if (!info.changes) return res.status(404).json({ error: 'Entry not found.' });
-  res.json({ ok: true });
+  try {
+    const event = eventById(req.params.id);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    const info = guestbook.remove(req.params.entryId, event.id);
+    if (!info.changes) return res.status(404).json({ error: 'Entry not found.' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE guestbook:', err);
+    res.status(500).json({ error: 'Unable to delete guest book entry.' });
+  }
 });
 
 // ── Quiz copy ────────────────────────────────────────────────────────────────
@@ -827,58 +731,129 @@ router.delete('/questions/:qid', (req, res) => {
   res.json({ ok: true });
 });
 
-// ── Media (Docker volumes) ───────────────────────────────────────────────────
+// ── Per-event media ──────────────────────────────────────────────────────────
 
-router.get('/media', async (_req, res) => {
+function eventMediaRefs(eventId) {
+  const images = new Set();
+  const music = new Set();
+  const quiz = quizByEvent(eventId);
+  const addImage = (url) => {
+    const name = files.legacyImageName(url);
+    if (name) images.add(name);
+  };
+  const addMusic = (value) => {
+    const name = files.safeMp3Name(value);
+    if (name) music.add(name);
+  };
+  if (!quiz) return { images, music };
+  addImage(quiz.hero_image);
+  const ecard = parseJson(quiz.ecard_json, {});
+  if (Array.isArray(ecard.photos)) ecard.photos.forEach((p) => addImage(p && p.src));
+  const audio = parseJson(quiz.audio_json, {});
+  addMusic(audio.backgroundMusic);
+  addMusic(audio.correctSound);
+  addMusic(audio.wrongSound);
+  if (Array.isArray(audio.playlist)) audio.playlist.forEach(addMusic);
+  const questions = db.prepare(
+    'SELECT image_url, audio_clip FROM quiz_questions WHERE quiz_id = ?'
+  ).all(quiz.id);
+  questions.forEach((q) => {
+    addImage(q.image_url);
+    addMusic(q.audio_clip);
+  });
+  return { images, music };
+}
+
+async function eventMediaList(event) {
+  const id = event.id;
+  const refs = eventMediaRefs(id);
+  const [images, music, legacyImages, legacyMusic] = await Promise.all([
+    files.listMedia(files.eventMediaDir('image', id), `/images/${id}`, files.IMAGE_RE),
+    files.listMedia(files.eventMediaDir('music', id), `/music/${id}`, /\.mp3$/i),
+    files.listMedia(files.IMAGES_DIR, '/images', files.IMAGE_RE),
+    files.listMedia(files.MUSIC_DIR, '/music', /\.mp3$/i),
+  ]);
+  const imageNames = new Set(images.map((f) => f.name));
+  const musicNames = new Set(music.map((f) => f.name));
+  const guestNames = gallery.namesFor(id);
+  for (const file of images) {
+    if (!guestNames.has(file.name)) continue;
+    file.guest = true;
+    file.guestName = guestNames.get(file.name) || '';
+  }
+  for (const file of legacyImages) {
+    if (imageNames.has(file.name) || !refs.images.has(file.name)) continue;
+    images.push({ ...file, legacy: true });
+  }
+  for (const file of legacyMusic) {
+    if (musicNames.has(file.name) || !refs.music.has(file.name)) continue;
+    music.push({ ...file, legacy: true });
+  }
+  return { images, music };
+}
+
+router.get('/events/:id/media', async (req, res) => {
   try {
-    const [images, music] = await Promise.all([
-      listMedia(IMAGES_DIR, '/images', /\.(jpe?g|png|gif|webp|mp4|webm)$/i),
-      listMedia(MUSIC_DIR,  '/music',  /\.mp3$/i),
-    ]);
-    res.json({ images, music });
+    const event = eventById(req.params.id);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    res.json(await eventMediaList(event));
   } catch (err) {
-    console.error('GET media:', err);
+    console.error('GET event media:', err);
     res.status(500).json({ error: 'Unable to list media.' });
   }
 });
 
-router.post('/media', async (req, res) => {
+router.post('/events/:id/media', async (req, res) => {
   try {
-    const raw    = await readLimited(req, MAX_UPLOAD);
-    const parsed = parseMultipartFile(raw, req.headers['content-type']);
-    const kind   = req.query.kind === 'music' ? 'music' : 'image';
-    const ext    = path.extname(parsed.filename).toLowerCase();
+    const event = eventById(req.params.id);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    const raw = await files.readLimited(req, MAX_UPLOAD);
+    const parsed = files.parseMultipartFile(raw, req.headers['content-type']);
+    const kind = req.query.kind === 'music' ? 'music' : 'image';
+    const ext = path.extname(parsed.filename).toLowerCase();
     if (kind === 'music' && ext !== '.mp3') {
-      return res.status(400).json({ error: 'Only .mp3 files can be uploaded to the music volume.' });
+      return res.status(400).json({ error: 'Only .mp3 files can be uploaded for this event.' });
     }
-    if (kind === 'image' && !IMAGE_EXTS.has(ext)) {
+    if (kind === 'image' && !files.IMAGE_EXTS.has(ext)) {
       return res.status(400).json({ error: 'Files must be jpg, png, gif, webp, mp4, or webm.' });
     }
-    const dir  = kind === 'music' ? MUSIC_DIR : IMAGES_DIR;
-    const name = uniqueFilename(dir, parsed.filename);
+    const dir = files.eventMediaDir(kind, event.id);
+    if (!dir) return res.status(400).json({ error: 'Invalid event.' });
+    fs.mkdirSync(dir, { recursive: true });
+    const name = files.uniqueFilename(dir, parsed.filename);
     await fsp.writeFile(path.join(dir, name), parsed.buffer);
     const url = kind === 'music'
-      ? `/music/${encodeURIComponent(name)}`
-      : `/images/${encodeURIComponent(name)}`;
+      ? `/music/${event.id}/${encodeURIComponent(name)}`
+      : `/images/${event.id}/${encodeURIComponent(name)}`;
     res.status(201).json({ kind, name, url, size: parsed.buffer.length });
   } catch (err) {
     const status = err.status || 500;
-    if (status >= 500) console.error('POST media:', err);
+    if (status >= 500) console.error('POST event media:', err);
     res.status(status).json({ error: err.message || 'Upload failed.' });
   }
 });
 
-router.delete('/media/:kind/:filename', async (req, res) => {
+router.delete('/events/:id/media/:kind/:filename', async (req, res) => {
+  const event = eventById(req.params.id);
+  if (!event) return res.status(404).json({ error: 'Event not found.' });
   const kind = req.params.kind === 'music' ? 'music' : (req.params.kind === 'image' ? 'image' : null);
   if (!kind) return res.status(400).json({ error: 'Kind must be image or music.' });
-  const loc = mediaPath(kind, req.params.filename);
-  if (!loc) return res.status(400).json({ error: 'Invalid filename.' });
+  const name = files.safeFileName(req.params.filename);
+  const dir = files.eventMediaDir(kind, event.id);
+  if (!name || !dir) return res.status(400).json({ error: 'Invalid filename.' });
+  if (kind === 'music' && !/\.mp3$/i.test(name)) {
+    return res.status(400).json({ error: 'Invalid filename.' });
+  }
+  if (kind === 'image' && !files.IMAGE_RE.test(name)) {
+    return res.status(400).json({ error: 'Invalid filename.' });
+  }
   try {
-    await fsp.unlink(loc.full);
+    await fsp.unlink(path.join(dir, name));
+    if (kind === 'image') gallery.removeByFilename(event.id, name);
     res.json({ ok: true });
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'File not found.' });
-    console.error('DELETE media:', err);
+    console.error('DELETE event media:', err);
     res.status(500).json({ error: 'Unable to delete file.' });
   }
 });

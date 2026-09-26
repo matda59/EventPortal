@@ -245,8 +245,9 @@
     // ['admin'] | ['admin','media'] | ['admin','new'] | ['admin','events', id]
     state.view = 'events';
     state.eventId = null;
-    if (parts[1] === 'media') state.view = 'media';
-    else if (parts[1] === 'new') { state.view = 'editor'; state.eventId = 'new'; }
+    if (parts[1] === 'media') {
+      history.replaceState(null, '', '/admin');
+    } else if (parts[1] === 'new') { state.view = 'editor'; state.eventId = 'new'; }
     else if (parts[1] === 'events' && parts[2]) { state.view = 'editor'; state.eventId = parts[2]; }
   }
 
@@ -263,7 +264,6 @@
       <aside class="sidebar">
         <div class="brand">Event Portal</div>
         <button class="nav-link ${active === 'events' ? 'active' : ''}" data-go="/admin">Events</button>
-        <button class="nav-link ${active === 'media' ? 'active' : ''}" data-go="/admin/media">Media library</button>
         <div class="sidebar-spacer"></div>
         <button class="nav-link" id="logout-btn" type="button">Log out</button>
       </aside>`;
@@ -502,7 +502,7 @@
         </div>
         <div class="span-2">
           <h2 class="section-title">Photos &amp; background</h2>
-          <p class="hint">Click a Polaroid on the left or right to add a photo. Guests see those Polaroids around the event home, and again in the gallery. Use the centre button for the page background. Save the event to publish them.</p>
+          <p class="hint">Click a Polaroid on the left or right to add a photo from this event’s media. Guests see those Polaroids around the event home, and again in the gallery. Use the centre button for the page background. Save the event to publish them.</p>
           ${eventLookHtml({
             photos: ((state.detail && state.detail.quiz && state.detail.quiz.ecard) || {}).photos,
             bgImage: (state.detail && state.detail.quiz && state.detail.quiz.heroImage) || '',
@@ -562,7 +562,7 @@
               <input type="checkbox" id="ev-gallery" ${ev.enableGallery !== false ? 'checked' : ''} />
               <span>
                 <strong>Photo &amp; video gallery</strong>
-                <small>Photos and videos from the event home page</small>
+                <small>Guests add their own photos and videos</small>
               </span>
             </label>
             <label class="feature-card">
@@ -633,7 +633,7 @@
       const picked = new Set((Array.isArray(selected) ? selected : []).map(String));
       const files = state.media.music || [];
       if (!files.length && !picked.size) {
-        return '<p class="hint">Upload MP3s under Media, then tick them here.</p>';
+        return '<p class="hint">Upload MP3s on the Media tab, then tick them here.</p>';
       }
       const extra = [...picked].filter((n) => n && !files.some((f) => f.name === n));
       const items = files.map((f) => f.name).concat(extra);
@@ -666,7 +666,7 @@
       </div>
 
       <h2 class="section-title" style="margin-top:28px">Audio cues</h2>
-      <p class="hint">Sound effects for this quiz. Guests only hear the guest playlist below — not every MP3 on the host.</p>
+      <p class="hint">Sound effects for this quiz. Upload tracks on the Media tab. Guests only hear the playlist you tick below.</p>
       <div class="form-grid">
         <div class="field">
           <label for="audio-bg">Background</label>
@@ -896,6 +896,7 @@
         <button class="tab ${state.tab === 'quiz' ? 'active' : ''}" data-tab="quiz">Quiz</button>
         <button class="tab ${state.tab === 'questions' ? 'active' : ''}" data-tab="questions">Questions (${(detail.questions || []).length})</button>
         <button class="tab ${state.tab === 'guestbook' ? 'active' : ''}" data-tab="guestbook">Guest book (${ev.guestbookCount || (detail.guestbook && detail.guestbook.count) || 0})</button>
+        <button class="tab ${state.tab === 'media' ? 'active' : ''}" data-tab="media">Media</button>
         <button class="tab ${state.tab === 'scores' ? 'active' : ''}" data-tab="scores">Scores (${ev.scoreCount || (detail.scores && detail.scores.count) || 0})</button>
       </div>`;
 
@@ -904,6 +905,7 @@
     else if (state.tab === 'quiz') body = quizFields(detail.quiz);
     else if (state.tab === 'scores') body = scoresPanel(detail.scores);
     else if (state.tab === 'guestbook') body = guestbookPanel(detail.guestbook);
+    else if (state.tab === 'media') body = mediaPanel();
     else {
       const qs = detail.questions || [];
       body = `
@@ -943,6 +945,7 @@
         state.tab = btn.getAttribute('data-tab');
         if (state.tab === 'scores' && !(state.detail && state.detail.scores)) await loadScores();
         if (state.tab === 'guestbook' && !(state.detail && state.detail.guestbook)) await loadGuestbook();
+        if (state.tab === 'media') await loadMedia();
         renderEditor();
       });
     });
@@ -1027,6 +1030,10 @@
     });
     document.getElementById('scores-csv')?.addEventListener('click', downloadScoresCsv);
     document.getElementById('scores-reset')?.addEventListener('click', resetScores);
+    if (state.tab === 'media') {
+      bindDropzones(true);
+      bindMediaDeletes();
+    }
     $app.querySelectorAll('[data-del-gb]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         if (!confirm('Delete this guest book message?')) return;
@@ -1358,35 +1365,25 @@
     } catch (err) { toast(err.message, 'err'); }
   }
 
-  // ── Media library ──────────────────────────────────────────────────
-  function renderMedia() {
-    $app.innerHTML = `
-      <div class="shell">
-        ${nav('media')}
-        <main class="content">
-          <div class="page-head">
-            <div>
-              <h1>Media library</h1>
-              <p class="sub">Files land in the Docker volumes for <code>/app/public/images</code> and <code>/app/public/music</code>.</p>
-            </div>
-          </div>
-          <div class="grid grid-2">
-            <section>
-              <h2 class="section-title">Photos &amp; videos</h2>
-              ${dropzone('image')}
-              <div class="media-grid">${mediaCards(state.media.images, 'image')}</div>
-            </section>
-            <section>
-              <h2 class="section-title">Music (MP3)</h2>
-              ${dropzone('music')}
-              <div class="media-grid">${mediaCards(state.media.music, 'music')}</div>
-            </section>
-          </div>
-        </main>
+  // ── Per-event media ────────────────────────────────────────────────
+  function mediaPanel() {
+    const images = (state.media && state.media.images) || [];
+    const music = (state.media && state.media.music) || [];
+    return `
+      <h2 class="section-title">This event’s media</h2>
+      <p class="hint">Guests add photos and videos from the Gallery on the event page. Those show up here so you can remove them. Host uploads are for Polaroids, the page background, question pictures, and the guest playlist.</p>
+      <div class="grid grid-2">
+        <section>
+          <h2 class="section-title">Photos &amp; videos</h2>
+          ${dropzone('image')}
+          <div class="media-grid">${mediaCards(images, 'image')}</div>
+        </section>
+        <section>
+          <h2 class="section-title">Music (MP3)</h2>
+          ${dropzone('music')}
+          <div class="media-grid">${mediaCards(music, 'music')}</div>
+        </section>
       </div>`;
-    bindShell();
-    bindDropzones();
-    bindMediaDeletes();
   }
 
   function dropzone(kind) {
@@ -1402,7 +1399,7 @@
   }
 
   function mediaCards(items, kind) {
-    if (!items || !items.length) return '<p class="empty">Nothing uploaded yet.</p>';
+    if (!items || !items.length) return '<p class="empty">Nothing uploaded for this event yet.</p>';
     return items.map((f) => `
       <article class="media-item">
         ${kind === 'image'
@@ -1412,17 +1409,20 @@
           : `<div style="padding:28px 10px;text-align:center;background:#0f172a;color:#fff;font-weight:700">MP3</div>`}
         <div class="body">
           <div class="name">${esc(f.name)}</div>
-          <p class="meta">${esc(f.url)}</p>
+          <p class="meta">${esc(f.guest ? ('Guest upload' + (f.guestName ? ' · ' + f.guestName : '')) : (f.legacy ? 'Already used on this event' : f.url))}</p>
           <div class="card-actions">
             <button class="btn btn-ghost btn-sm" data-copy="${esc(kind === 'music' ? f.name : f.url)}">Copy path</button>
-            <button class="btn btn-ghost btn-sm" data-del-media="${esc(kind)}" data-name="${esc(f.name)}">Delete</button>
+            ${f.legacy ? '' : `<button class="btn btn-ghost btn-sm" data-del-media="${esc(kind)}" data-name="${esc(f.name)}">Delete</button>`}
           </div>
         </div>
       </article>`).join('');
   }
 
-  function bindDropzones() {
-    $app.querySelectorAll('.drop').forEach((zone) => {
+  function bindDropzones(refreshAfter) {
+    const root = refreshAfter ? $app : ($modal.querySelector('.modal') || $app);
+    root.querySelectorAll('.drop').forEach((zone) => {
+      if (zone.dataset.bound) return;
+      zone.dataset.bound = '1';
       const kind = zone.getAttribute('data-kind');
       ['dragenter', 'dragover'].forEach((ev) => zone.addEventListener(ev, (e) => {
         e.preventDefault(); zone.classList.add('over');
@@ -1432,13 +1432,15 @@
       }));
       zone.addEventListener('drop', (e) => {
         const file = e.dataTransfer.files && e.dataTransfer.files[0];
-        if (file) uploadFile(kind, file).catch((err) => toast(err.message, 'err'));
+        if (file) uploadFile(kind, file, refreshAfter).catch((err) => toast(err.message, 'err'));
       });
     });
-    $app.querySelectorAll('[data-upload]').forEach((input) => {
+    root.querySelectorAll('[data-upload]').forEach((input) => {
+      if (input.dataset.bound) return;
+      input.dataset.bound = '1';
       input.addEventListener('change', () => {
         const file = input.files && input.files[0];
-        if (file) uploadFile(input.getAttribute('data-upload'), file).catch((err) => toast(err.message, 'err'));
+        if (file) uploadFile(input.getAttribute('data-upload'), file, refreshAfter).catch((err) => toast(err.message, 'err'));
         input.value = '';
       });
     });
@@ -1453,26 +1455,29 @@
     });
     $app.querySelectorAll('[data-del-media]').forEach((btn) => {
       btn.addEventListener('click', async () => {
-        if (!confirm('Delete this file from the volume?')) return;
+        if (!confirm('Delete this file from this event?')) return;
         const kind = btn.getAttribute('data-del-media');
         const name = btn.getAttribute('data-name');
         try {
-          await api('/media/' + kind + '/' + encodeURIComponent(name), { method: 'DELETE' });
+          await api('/events/' + state.eventId + '/media/' + kind + '/' + encodeURIComponent(name), { method: 'DELETE' });
           toast('Deleted');
           await loadMedia();
-          renderMedia();
+          renderEditor();
         } catch (err) { toast(err.message, 'err'); }
       });
     });
   }
 
-  async function uploadFile(kind, file) {
+  async function uploadFile(kind, file, refreshAfter) {
+    if (!state.eventId || state.eventId === 'new') {
+      throw new Error('Save the event first, then upload files on the Media tab.');
+    }
     const body = new FormData();
     body.append('file', file);
-    const data = await api('/media?kind=' + encodeURIComponent(kind), { method: 'POST', body });
+    const data = await api('/events/' + state.eventId + '/media?kind=' + encodeURIComponent(kind), { method: 'POST', body });
     toast('Uploaded ' + file.name);
     await loadMedia();
-    if (state.view === 'media') renderMedia();
+    if (refreshAfter && state.tab === 'media') renderEditor();
     return data;
   }
 
@@ -1484,6 +1489,10 @@
   }
 
   function openPicker(kind, onPick) {
+    if (!state.eventId || state.eventId === 'new') {
+      toast('Save the event first, then upload files on the Media tab.', 'err');
+      return;
+    }
     const items = kind === 'music' ? state.media.music : state.media.images;
     $modal.innerHTML = `
       <div class="modal-backdrop">
@@ -1492,7 +1501,7 @@
             <h2>Choose ${kind === 'music' ? 'an MP3' : 'a photo'}</h2>
             <button class="btn btn-ghost btn-sm" type="button" id="close-modal">Close</button>
           </div>
-          <p class="hint">Pick from the library, or upload from this computer.</p>
+          <p class="hint">Pick from this event’s media, or upload from this computer.</p>
           ${dropzone(kind)}
           <div class="grid" style="gap:8px">
             ${(items || []).map((f) => `
@@ -1553,13 +1562,16 @@
   function render() {
     $modal.innerHTML = '';
     if (!state.authed) return renderLogin();
-    if (state.view === 'media') return renderMedia();
     if (state.view === 'editor') return renderEditor();
     renderEvents();
   }
 
   async function loadMedia() {
-    try { state.media = await api('/media'); }
+    if (!state.eventId || state.eventId === 'new') {
+      state.media = { images: [], music: [] };
+      return;
+    }
+    try { state.media = await api('/events/' + state.eventId + '/media'); }
     catch { state.media = { images: [], music: [] }; }
   }
 
@@ -1569,9 +1581,6 @@
       if (state.view === 'events') {
         state.events = await api('/events');
         renderEvents();
-      } else if (state.view === 'media') {
-        await loadMedia();
-        renderMedia();
       } else if (state.view === 'editor' && state.eventId !== 'new') {
         $app.innerHTML = `<div class="shell">${nav('events')}<main class="content"><p class="meta">Loading event…</p></main></div>`;
         bindShell();
