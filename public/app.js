@@ -54,6 +54,8 @@
     if (screens[name]) screens[name].classList.add('active');
     const chrome = $('site-chrome');
     if (chrome) chrome.hidden = name === 'home';
+    const board = $('photo-board');
+    if (board) board.hidden = name !== 'home' || !board.childElementCount;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -82,6 +84,7 @@
     if ($('home-kicker')) $('home-kicker').textContent = subtitle || '';
     if ($('home-description')) $('home-description').textContent = message || '';
     if ($('home-nav')) $('home-nav').innerHTML = '';
+    buildPhotoBoard((state.config && state.config.ecard) || {});
     applyPageBackground(heroImage);
     const hero = $('home-hero');
     if (hero) {
@@ -199,6 +202,28 @@
     return photos.filter((p) => p && p.src);
   }
 
+  function buildPhotoBoard(ecard) {
+    const board = $('photo-board');
+    if (!board) return;
+    const photos = (ecard && Array.isArray(ecard.photos)) ? ecard.photos.slice(0, 6) : [];
+    board.innerHTML = '';
+    photos.forEach((p, i) => {
+      if (!p || !p.src) return;
+      const fig = document.createElement('figure');
+      fig.className = 'polaroid pos-' + (i + 1);
+      const caption = p.caption ? escHtml(p.caption) : '';
+      const src = escHtml(p.src);
+      const media = isVideoSrc(p.src)
+        ? `<video src="${src}" muted playsinline autoplay loop></video>`
+        : `<img src="${src}" alt="${caption}" />`;
+      fig.innerHTML =
+        `<div class="polaroid-photo">${media}</div>` +
+        (caption ? `<figcaption>${caption}</figcaption>` : '');
+      board.appendChild(fig);
+    });
+    board.hidden = !board.childElementCount;
+  }
+
   function isVideoSrc(src) {
     return /\.(mp4|webm|ogg|mov)(\?|$)/i.test(src || '');
   }
@@ -280,6 +305,7 @@
 
     fillChrome(meta);
     applyPageBackground(meta.bgImage || meta.heroImage);
+    buildPhotoBoard(ecard);
     if ($('home-emoji')) $('home-emoji').textContent = meta.headerEmoji || '';
     if ($('home-name')) $('home-name').textContent = eventLabel();
     if ($('home-kicker')) {

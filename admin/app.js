@@ -502,7 +502,7 @@
         </div>
         <div class="span-2">
           <h2 class="section-title">Photos &amp; background</h2>
-          <p class="hint">Click a Polaroid on the left or right to add a photo from the library or your computer. Those photos are the guest gallery. Use the centre button for a page background.</p>
+          <p class="hint">Click a Polaroid on the left or right to add a photo. Guests see those Polaroids around the event home, and again in the gallery. Use the centre button for the page background. Save the event to publish them.</p>
           ${eventLookHtml({
             photos: ((state.detail && state.detail.quiz && state.detail.quiz.ecard) || {}).photos,
             bgImage: (state.detail && state.detail.quiz && state.detail.quiz.heroImage) || '',
@@ -1202,13 +1202,11 @@
       themePreset: val('ev-preset') || 'custom',
       theme: readThemeFromForm(),
       bgImage: val('ev-bg') || null,
-      photos: [],
+      photos: Array.from({ length: 6 }, (_, i) => ({
+        src: val('photo-src-' + i),
+        caption: val('photo-cap-' + i),
+      })),
     };
-    for (let i = 0; i < 6; i++) {
-      const src = val('photo-src-' + i);
-      const caption = val('photo-cap-' + i);
-      if (src || caption) payload.photos.push({ src, caption });
-    }
     try {
       if (isNew) {
         const created = await api('/events', { method: 'POST', body: JSON.stringify(payload) });
