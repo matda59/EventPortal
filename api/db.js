@@ -11,6 +11,7 @@ const db = new Database(path.join(DATA_DIR, 'portal.db'));
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+db.pragma('busy_timeout = 5000');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS events (

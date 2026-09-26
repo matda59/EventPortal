@@ -482,6 +482,8 @@
       : 'Leave a short note for the hosts.';
     if (state.guestbookName) $('guestbook-name').value = state.guestbookName;
     showScreen('guestbook');
+    const errEl = $('guestbook-error');
+    if (errEl) errEl.hidden = true;
     try {
       const data = await apiJson(GUESTBOOK_URL);
       renderGuestbookList(data.entries);
@@ -765,8 +767,15 @@
   const mp3 = { tracks: [], index: 0, playing: false, volume: 0.3, audio: null, open: true };
 
   function mp3TrackUrl(name) {
-    if (/^(https?:)?\//.test(name)) return name;
-    return '/music/' + encodeURIComponent(name);
+    const value = String(name || '');
+    if (/^(https?:)?\//.test(value)) return value;
+    return '/music/' + encodeURIComponent(value);
+  }
+
+  function mp3Label(src) {
+    let base = String(src || '').split('/').pop() || 'Track';
+    try { base = decodeURIComponent(base); } catch { /* keep */ }
+    return base.replace(/\.mp3$/i, '').replace(/[_-]+/g, ' ') || 'Track';
   }
 
   async function setupMp3Player() {
@@ -779,7 +788,7 @@
       const res  = await fetch(MUSIC_URL);
       const files = res.ok ? await res.json() : [];
       mp3.tracks  = files.map((f) => ({
-        name: f.replace(/\.mp3$/i, '').replace(/[_-]+/g, ' '),
+        name: mp3Label(f),
         url:  mp3TrackUrl(f),
       }));
     } catch { mp3.tracks = []; }
