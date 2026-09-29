@@ -374,12 +374,21 @@ body.has-page-bg .site-chrome {
   overflow: hidden;
   border: 1px solid var(--border-soft);
 }
+.gallery-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
 .gallery-item img, .gallery-item video {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
   display: block;
   background: #1e293b;
+  pointer-events: none;
 }
 .gallery-item figcaption {
   padding: 8px 10px;
@@ -388,6 +397,67 @@ body.has-page-bg .site-chrome {
 }
 
 .guestbook-message { min-height: 96px; resize: vertical; }
+.avatar-field { margin-top: 14px; }
+.avatar-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.avatar-choice {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 2px solid var(--border-soft);
+  background: var(--bg-earth);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.avatar-choice[aria-selected="true"] {
+  border-color: var(--primary-red);
+  box-shadow: 0 0 0 3px rgba(184, 59, 38, 0.18);
+}
+.avatar-upload-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.avatar-upload {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--primary-red);
+  background: var(--surface-card);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.avatar-upload input, #guestbook-avatar-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+.avatar-clear {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.avatar-preview {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 16px;
+  margin-top: 10px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-earth);
+}
 .guestbook-list { margin-top: 22px; display: grid; gap: 10px; max-height: min(52vh, 420px); overflow: auto; }
 .guestbook-entry {
   text-align: left;
@@ -396,8 +466,75 @@ body.has-page-bg .site-chrome {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
 }
+.guestbook-entry-head { display: flex; align-items: center; gap: 10px; }
 .guestbook-entry strong { color: var(--primary-red); }
-.guestbook-entry p { margin-top: 4px; color: var(--text-muted); font-size: 0.95rem; line-height: 1.45; }
+.guestbook-entry p { margin-top: 6px; color: var(--text-muted); font-size: 0.95rem; line-height: 1.45; }
+.gb-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-card);
+  border: 1px solid var(--border-soft);
+  font-size: 1.4rem;
+  line-height: 1;
+  flex: 0 0 auto;
+  object-fit: cover;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(20, 12, 12, 0.92);
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+}
+.lightbox-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+}
+.lightbox-caption { font-size: 0.95rem; line-height: 1.35; }
+.lightbox-tools { display: flex; gap: 6px; flex: 0 0 auto; }
+.lightbox-tools button {
+  min-width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  font-size: 1.15rem;
+  cursor: pointer;
+  padding: 0 10px;
+}
+.lightbox-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  cursor: grab;
+}
+.lightbox-stage.is-dragging { cursor: grabbing; }
+.lightbox-stage img, .lightbox-stage video {
+  width: min(92vw, 1100px);
+  height: min(78vh, 820px);
+  object-fit: contain;
+  transform-origin: center center;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+body.lightbox-open { overflow: hidden; }
 
 @media (max-width: 480px) {
   .home-nav, .gallery-grid { grid-template-columns: 1fr; }

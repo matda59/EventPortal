@@ -31,7 +31,17 @@
     sessionId: null,
     galleryName: '',
     galleryItems: null,
+    guestbookAvatar: '',
+    guestbookAvatarFile: null,
+    lightboxIndex: 0,
   };
+
+  const AVATARS = [
+    '😊', '😄', '😁', '🥰', '😍', '🤩', '😎', '🤓', '🥳', '😇',
+    '🤗', '😺', '🎉', '🎊', '🎂', '🎈', '🎁', '💖', '✨', '🌟',
+    '🎶', '💃', '🕺', '🥂', '👍', '🙌', '👏', '🔥', '🌸', '🍀',
+    '🐶', '🐱', '🦊', '🐼',
+  ];
 
   // ── Element cache ──────────────────────────────────────────────────
   const $ = (id) => document.getElementById(id);
@@ -423,12 +433,16 @@
       grid.innerHTML = '<p class="hof-empty">No photos or videos yet. Add the first one.</p>';
       return;
     }
-    grid.innerHTML = list.map((p) => {
+    grid.innerHTML = list.map((p, i) => {
       const src = escHtml(p.src);
+      const label = escHtml(p.caption || p.name || 'View larger');
       const media = isVideoSrc(p.src)
-        ? `<video src="${src}" controls playsinline></video>`
-        : `<img src="${src}" alt="${escHtml(p.caption || p.name || '')}" />`;
-      return `<figure class="gallery-item">${media}${galleryCaption(p)}</figure>`;
+        ? `<video src="${src}" muted playsinline></video>`
+        : `<img src="${src}" alt="" />`;
+      return `<figure class="gallery-item">
+        <button type="button" class="gallery-open" data-gallery-open="${i}" aria-label="${label}">${media}</button>
+        ${galleryCaption(p)}
+      </figure>`;
     }).join('');
   }
 
@@ -507,6 +521,179 @@
     }
   }
 
+  const lightbox = {
+    scale: 1,
+    x: 0,
+    y: 0,
+    pointers: new Map(),
+    drag: null,
+    pinchDist: 0,
+    pinchScale: 1,
+  };
+
+  function lightboxMedia() {
+    const video = $('lightbox-video');
+    const img = $('lightbox-img');
+    if (video && !video.hidden) return video;
+    return img;
+  }
+
+  function applyLightboxTransform() {
+    const media = lightboxMedia();
+    if (!media) return;
+    media.style.transform = `translate(${lightbox.x}px, ${lightbox.y}px) scale(${lightbox.scale})`;
+  }
+
+  function resetLightboxZoom() {
+    lightbox.scale = 1;
+    lightbox.x = 0;
+    lightbox.y = 0;
+    applyLightboxTransform();
+  }
+
+  function setLightboxZoom(next) {
+    lightbox.scale = Math.min(5, Math.max(1, next));
+    if (lightbox.scale <= 1) {
+      lightbox.scale = 1;
+      lightbox.x = 0;
+      lightbox.y = 0;
+    }
+    applyLightboxTransform();
+  }
+
+  function showLightboxItem(index) {
+    const items = state.galleryItems || [];
+    if (!items.length) return;
+    const next = (index + items.length) % items.length;
+    state.lightboxIndex = next;
+    const item = items[next];
+    const img = $('lightbox-img');
+    const video = $('lightbox-video');
+    const caption = $('lightbox-caption');
+    const bits = [item.name, item.caption].filter(Boolean);
+    if (caption) caption.textContent = bits.join(' · ');
+    resetLightboxZoom();
+    if (isVideoSrc(item.src)) {
+      if (img) { img.hidden = true; img.removeAttribute('src'); }
+      if (video) {
+        video.hidden = false;
+        video.src = item.src;
+        video.play().catch(() => {});
+      }
+    } else {
+      if (video) {
+        video.pause();
+        video.hidden = true;
+        video.removeAttribute('src');
+      }
+      if (img) {
+        img.hidden = false;
+        img.src = item.src;
+        img.alt = item.caption || item.name || 'Photo';
+      }
+    }
+    const box = $('lightbox');
+    if (box) box.hidden = false;
+    document.body.classList.add('lightbox-open');
+  }
+
+  function closeLightbox() {
+    const box = $('lightbox');
+    if (box) box.hidden = true;
+    document.body.classList.remove('lightbox-open');
+    const video = $('lightbox-video');
+    if (video) {
+      video.pause();
+      video.removeAttribute('src');
+    }
+    const img = $('lightbox-img');
+    if (img) img.removeAttribute('src');
+    resetLightboxZoom();
+  }
+
+  function onGalleryOpen(e) {
+    const btn = e.target.closest('[data-gallery-open]');
+    if (!btn) return;
+    showLightboxItem(Number(btn.getAttribute('data-gallery-open')) || 0);
+  }
+
+  function pinchDistance() {
+    const pts = [...lightbox.pointers.values()];
+    if (pts.length < 2) return 0;
+    const dx = pts[0].x - pts[1].x;
+    const dy = pts[0].y - pts[1].y;
+    return Math.hypot(dx, dy);
+  }
+
+  function wireLightbox() {
+    const stage = $('lightbox-stage');
+    $('lightbox-close')?.addEventListener('click', closeLightbox);
+    $('lightbox-in')?.addEventListener('click', () => setLightboxZoom(lightbox.scale * 1.25));
+    $('lightbox-out')?.addEventListener('click', () => setLightboxZoom(lightbox.scale / 1.25));
+    $('lightbox-fit')?.addEventListener('click', resetLightboxZoom);
+    $('lightbox-prev')?.addEventListener('click', () => showLightboxItem(state.lightboxIndex - 1));
+    $('lightbox-next')?.addEventListener('click', () => showLightboxItem(state.lightboxIndex + 1));
+    stage?.addEventListener('dblclick', () => {
+      if (lightbox.scale > 1) resetLightboxZoom();
+      else setLightboxZoom(2);
+    });
+    stage?.addEventListener('wheel', (e) => {
+      if ($('lightbox')?.hidden) return;
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      setLightboxZoom(lightbox.scale * factor);
+    }, { passive: false });
+    stage?.addEventListener('pointerdown', (e) => {
+      if (e.button != null && e.button !== 0) return;
+      lightbox.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      stage.setPointerCapture(e.pointerId);
+      if (lightbox.pointers.size === 1) {
+        lightbox.drag = { x: e.clientX, y: e.clientY, ox: lightbox.x, oy: lightbox.y, moved: false };
+      } else if (lightbox.pointers.size >= 2) {
+        lightbox.pinchDist = pinchDistance();
+        lightbox.pinchScale = lightbox.scale;
+        lightbox.drag = null;
+      }
+    });
+    stage?.addEventListener('pointermove', (e) => {
+      if (!lightbox.pointers.has(e.pointerId)) return;
+      lightbox.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (lightbox.pointers.size >= 2 && lightbox.pinchDist) {
+        setLightboxZoom(lightbox.pinchScale * (pinchDistance() / lightbox.pinchDist));
+        return;
+      }
+      if (!lightbox.drag || lightbox.scale <= 1) return;
+      const dx = e.clientX - lightbox.drag.x;
+      const dy = e.clientY - lightbox.drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) lightbox.drag.moved = true;
+      lightbox.x = lightbox.drag.ox + dx;
+      lightbox.y = lightbox.drag.oy + dy;
+      stage.classList.add('is-dragging');
+      applyLightboxTransform();
+    });
+    const endPointer = (e) => {
+      lightbox.pointers.delete(e.pointerId);
+      if (lightbox.pointers.size < 2) lightbox.pinchDist = 0;
+      if (lightbox.pointers.size === 0) {
+        stage.classList.remove('is-dragging');
+        const dragged = lightbox.drag && lightbox.drag.moved;
+        lightbox.drag = null;
+        if (!dragged && e.target === stage) closeLightbox();
+      }
+    };
+    stage?.addEventListener('pointerup', endPointer);
+    stage?.addEventListener('pointercancel', endPointer);
+    document.addEventListener('keydown', (e) => {
+      if ($('lightbox')?.hidden) return;
+      if (e.key === 'Escape') closeLightbox();
+      else if (e.key === 'ArrowLeft') showLightboxItem(state.lightboxIndex - 1);
+      else if (e.key === 'ArrowRight') showLightboxItem(state.lightboxIndex + 1);
+      else if (e.key === '+' || e.key === '=') setLightboxZoom(lightbox.scale * 1.25);
+      else if (e.key === '-' || e.key === '_') setLightboxZoom(lightbox.scale / 1.25);
+      else if (e.key === '0') resetLightboxZoom();
+    });
+  }
+
   async function openHof() {
     const container = $('hof-home-rows');
     if (container) container.innerHTML = '<div class="hof-loading">Loading…</div>';
@@ -525,6 +712,10 @@
     $('results-home')?.addEventListener('click', goHome);
     $('guestbook-form')?.addEventListener('submit', onGuestbookSubmit);
     $('gallery-form')?.addEventListener('submit', onGallerySubmit);
+    $('gallery-grid')?.addEventListener('click', onGalleryOpen);
+    renderAvatarChoices();
+    wireAvatarPicker();
+    wireLightbox();
 
     $('name-form').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -548,6 +739,87 @@
     $('play-again-btn').addEventListener('click', resetAndRestart);
   }
 
+  function avatarMarkup(avatar) {
+    const value = String(avatar || '');
+    if (!value) return '';
+    if (value.startsWith('/images/')) {
+      return `<img class="gb-avatar" src="${escHtml(value)}" alt="" />`;
+    }
+    return `<span class="gb-avatar" aria-hidden="true">${escHtml(value)}</span>`;
+  }
+
+  function renderAvatarChoices() {
+    const box = $('avatar-choices');
+    if (!box || box.childElementCount) return;
+    box.innerHTML = AVATARS.map((emoji, i) => `
+      <button type="button" class="avatar-choice" role="option" data-avatar-index="${i}" aria-selected="false" aria-label="Avatar ${i + 1}">${emoji}</button>
+    `).join('');
+  }
+
+  function syncAvatarChoice() {
+    const fileChosen = !!state.guestbookAvatarFile;
+    document.querySelectorAll('.avatar-choice').forEach((btn) => {
+      const emoji = AVATARS[Number(btn.getAttribute('data-avatar-index'))];
+      const on = !fileChosen && emoji === state.guestbookAvatar;
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    const preview = $('avatar-preview');
+    const clearBtn = $('avatar-clear');
+    if (preview) preview.hidden = !fileChosen;
+    if (clearBtn) clearBtn.hidden = !fileChosen;
+  }
+
+  function wireAvatarPicker() {
+    $('avatar-choices')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-avatar-index]');
+      if (!btn) return;
+      state.guestbookAvatar = AVATARS[Number(btn.getAttribute('data-avatar-index'))] || '';
+      clearAvatarFile();
+      syncAvatarChoice();
+    });
+    $('guestbook-avatar-file')?.addEventListener('change', () => {
+      const file = $('guestbook-avatar-file').files && $('guestbook-avatar-file').files[0];
+      if (!file) {
+        clearAvatarFile();
+        syncAvatarChoice();
+        return;
+      }
+      if (file.size > 400 * 1024) {
+        const errEl = $('guestbook-error');
+        if (errEl) {
+          errEl.textContent = 'Emoticon must be under 400 KB.';
+          errEl.hidden = false;
+        }
+        $('guestbook-avatar-file').value = '';
+        return;
+      }
+      state.guestbookAvatarFile = file;
+      const preview = $('avatar-preview');
+      if (preview) {
+        if (preview.src && preview.src.startsWith('blob:')) URL.revokeObjectURL(preview.src);
+        preview.src = URL.createObjectURL(file);
+        preview.hidden = false;
+      }
+      syncAvatarChoice();
+    });
+    $('avatar-clear')?.addEventListener('click', () => {
+      clearAvatarFile();
+      syncAvatarChoice();
+    });
+  }
+
+  function clearAvatarFile() {
+    state.guestbookAvatarFile = null;
+    const input = $('guestbook-avatar-file');
+    if (input) input.value = '';
+    const preview = $('avatar-preview');
+    if (preview) {
+      if (preview.src && preview.src.startsWith('blob:')) URL.revokeObjectURL(preview.src);
+      preview.removeAttribute('src');
+      preview.hidden = true;
+    }
+  }
+
   function renderGuestbookList(entries) {
     const list = $('guestbook-list');
     if (!list) return;
@@ -557,7 +829,7 @@
     }
     list.innerHTML = entries.map((e) => `
       <article class="guestbook-entry">
-        <strong>${escHtml(e.name)}</strong>
+        <div class="guestbook-entry-head">${avatarMarkup(e.avatar)}<strong>${escHtml(e.name)}</strong></div>
         <p>${escHtml(e.message)}</p>
       </article>`).join('');
   }
@@ -604,12 +876,27 @@
       $('guestbook-message').focus();
       return;
     }
+    const file = state.guestbookAvatarFile;
+    if (file && file.size > 400 * 1024) {
+      errEl.textContent = 'Emoticon must be under 400 KB.';
+      errEl.hidden = false;
+      return;
+    }
     try {
-      const data = await apiJson(GUESTBOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, message }),
-      });
+      let data;
+      if (file) {
+        const body = new FormData();
+        body.append('name', name);
+        body.append('message', message);
+        body.append('file', file);
+        data = await apiJson(GUESTBOOK_URL, { method: 'POST', body });
+      } else {
+        data = await apiJson(GUESTBOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, message, avatar: state.guestbookAvatar }),
+        });
+      }
       state.guestbookName = name;
       $('guestbook-message').value = '';
       renderGuestbookList(data.entries);

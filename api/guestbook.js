@@ -4,7 +4,21 @@ const crypto = require('crypto');
 const db = require('./db');
 
 const MAX_ENTRIES = 200;
-const CANONICAL = ['id', 'event_id', 'guest_name', 'message', 'created_at'];
+const CANONICAL = ['id', 'event_id', 'guest_name', 'message', 'created_at', 'avatar'];
+const AVATAR_CHOICES = Object.freeze([
+  '😊', '😄', '😁', '🥰', '😍', '🤩', '😎', '🤓', '🥳', '😇',
+  '🤗', '😺', '🎉', '🎊', '🎂', '🎈', '🎁', '💖', '✨', '🌟',
+  '🎶', '💃', '🕺', '🥂', '👍', '🙌', '👏', '🔥', '🌸', '🍀',
+  '🐶', '🐱', '🦊', '🐼',
+]);
+
+function cleanAvatar(value) {
+  const avatar = String(value || '').trim();
+  if (!avatar) return '';
+  if (AVATAR_CHOICES.includes(avatar)) return avatar;
+  if (/^\/images\/[A-Za-z0-9_-]{2,80}\/avatars\/[A-Za-z0-9._-]{1,80}$/.test(avatar)) return avatar;
+  return '';
+}
 let ready = false;
 
 function columnRows() {
@@ -64,7 +78,8 @@ function createCanonicalTable() {
       event_id   TEXT NOT NULL,
       guest_name TEXT NOT NULL,
       message    TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      avatar     TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_guestbook_event
       ON guestbook_entries(event_id, created_at);
@@ -80,8 +95,8 @@ function rebuild() {
     db.exec('DROP TABLE IF EXISTS guestbook_entries');
     createCanonicalTable();
     const ins = db.prepare(`
-      INSERT INTO guestbook_entries (id, event_id, guest_name, message, created_at)
-      VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')))
+      INSERT INTO guestbook_entries (id, event_id, guest_name, message, created_at, avatar)
+      VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')), ?)
     `);
     for (const row of rows) {
       const eventId = pick(row, ['event_id']);
@@ -89,7 +104,7 @@ function rebuild() {
       const message = pick(row, ['message', 'note', 'body', 'text']);
       if (!eventId || !name || !message) continue;
       const id = pick(row, ['id']) || crypto.randomBytes(10).toString('hex');
-      ins.run(id, eventId, name, message, pick(row, ['created_at']));
+      ins.run(id, eventId, name, message, pick(row, ['created_at']), cleanAvatar(pick(row, ['avatar'])));
     }
   });
   tx();
@@ -103,7 +118,8 @@ function ensureGuestbookSchema() {
       event_id   TEXT NOT NULL,
       guest_name TEXT NOT NULL,
       message    TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      avatar     TEXT
     );
   `);
   try {
@@ -111,6 +127,7 @@ function ensureGuestbookSchema() {
     addColumn('guest_name', 'guest_name TEXT');
     addColumn('message', 'message TEXT');
     addColumn('created_at', "created_at TEXT DEFAULT (datetime('now'))", 'created_at TEXT');
+    addColumn('avatar', 'avatar TEXT');
     if (needsRebuild()) rebuild();
   } catch (err) {
     if (!isRepairable(err)) throw err;
@@ -134,7 +151,7 @@ function isRepairable(err) {
 
 function list(eventId) {
   const run = () => db.prepare(`
-    SELECT id, guest_name, message, created_at
+    SELECT id, guest_name, message, created_at, avatar
     FROM guestbook_entries
     WHERE event_id = ?
     ORDER BY created_at DESC
@@ -151,22 +168,22 @@ function list(eventId) {
   }
 }
 
-function insertEntry(id, eventId, name, message) {
+function insertEntry(id, eventId, name, message, avatar) {
   db.prepare(`
-    INSERT INTO guestbook_entries (id, event_id, guest_name, message, created_at)
-    VALUES (?, ?, ?, ?, datetime('now'))
-  `).run(id, eventId, name, message);
+    INSERT INTO guestbook_entries (id, event_id, guest_name, message, created_at, avatar)
+    VALUES (?, ?, ?, ?, datetime('now'), ?)
+  `).run(id, eventId, name, message, cleanAvatar(avatar));
 }
 
-function add(id, eventId, name, message) {
+function add(id, eventId, name, message, avatar) {
   ensure();
   try {
-    insertEntry(id, eventId, name, message);
+    insertEntry(id, eventId, name, message, avatar);
   } catch (err) {
     if (!isRepairable(err)) throw err;
     ready = false;
     rebuild();
-    insertEntry(id, eventId, name, message);
+    insertEntry(id, eventId, name, message, avatar);
   }
 }
 
@@ -188,11 +205,14 @@ function serialize(rows) {
     name: r.guest_name || '',
     message: r.message || '',
     createdAt: r.created_at || null,
+    avatar: cleanAvatar(r.avatar),
   }));
 }
 
 module.exports = {
   MAX_ENTRIES,
+  AVATAR_CHOICES,
+  cleanAvatar,
   ensure,
   list,
   add,

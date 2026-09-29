@@ -101,6 +101,7 @@ db.exec(`
     guest_name TEXT NOT NULL,
     message    TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    avatar     TEXT,
     FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
   );
 
@@ -171,6 +172,7 @@ function repairGuestbookColumns() {
   add('guest_name', 'guest_name TEXT');
   add('message', 'message TEXT');
   add('created_at', "created_at TEXT DEFAULT (datetime('now'))", 'created_at TEXT');
+  add('avatar', 'avatar TEXT');
   if (names.has('event_id') && names.has('created_at')) {
     db.exec(`
       CREATE INDEX IF NOT EXISTS idx_guestbook_event
