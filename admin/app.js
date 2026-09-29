@@ -164,6 +164,13 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  function adminAvatar(avatar) {
+    const value = String(avatar || '');
+    if (!value) return '';
+    if (value.startsWith('/images/')) return `<img class="gb-admin-avatar" src="${esc(value)}" alt="" />`;
+    return `<span class="gb-admin-avatar" aria-hidden="true">${esc(value)}</span>`;
+  }
+
   function toast(msg, kind) {
     $toast.textContent = msg;
     $toast.className = 'toast show' + (kind === 'err' ? ' err' : '');
@@ -813,7 +820,10 @@
           <article class="card">
             <div class="row" style="justify-content:space-between;align-items:flex-start">
               <div>
-                <strong>${esc(e.name)}</strong>
+                <div class="row" style="align-items:center;gap:8px">
+                  ${adminAvatar(e.avatar)}
+                  <strong>${esc(e.name)}</strong>
+                </div>
                 <p class="meta">${esc(formatScoreDate(e.createdAt))}</p>
                 <p style="margin-top:8px">${esc(e.message)}</p>
               </div>
