@@ -399,6 +399,7 @@ router.put('/events/:id', (req, res) => {
 router.delete('/events/:id', (req, res) => {
   const event = eventById(req.params.id);
   if (!event) return res.status(404).json({ error: 'Event not found.' });
+  guestbook.removeForEvent(event.id);
   db.prepare('DELETE FROM events WHERE id = ?').run(event.id);
   files.removeEventMedia(event.id);
   res.json({ ok: true });
