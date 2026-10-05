@@ -597,22 +597,71 @@ app.post('/api/events/:slug/gallery', limitGallery, async (req, res) => {
   }
 });
 
-app.post('/api/events/:slug/guestbook', limitGuestbook, (req, res) => {
+const AVATAR_MAX_BYTES = 400 * 1024;
+
+function sniffImageExt(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return '.png';
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return '.jpg';
+  const head = buf.subarray(0, 6).toString('ascii');
+  if (head === 'GIF87a' || head === 'GIF89a') return '.gif';
+  if (buf.subarray(0, 4).toString('ascii') === 'RIFF' && buf.subarray(8, 12).toString('ascii') === 'WEBP') return '.webp';
+  return null;
+}
+
+async function storeAvatarUpload(eventId, buffer) {
+  const ext = sniffImageExt(buffer);
+  if (!ext) {
+    const err = new Error('Emoticon must be a png, jpg, gif, or webp.');
+    err.status = 400;
+    throw err;
+  }
+  const dir = files.eventMediaDir('image', eventId);
+  if (!dir) {
+    const err = new Error('Invalid event.');
+    err.status = 400;
+    throw err;
+  }
+  const avatarDir = path.join(dir, 'avatars');
+  await fsp.mkdir(avatarDir, { recursive: true });
+  const filename = `avatar-${uid()}${ext}`;
+  await fsp.writeFile(path.join(avatarDir, filename), buffer);
+  return `/images/${eventId}/avatars/${filename}`;
+}
+
+app.post('/api/events/:slug/guestbook', limitGuestbook, async (req, res) => {
   try {
     const event = findActiveEvent(req.params.slug);
     if (!event) return res.status(404).json({ error: 'Event not found.' });
     if (!event.enable_guestbook) return res.status(403).json({ error: 'Guest book is not enabled.' });
 
-    const name = readPlayerName(req.body?.name);
+    let name;
+    let message;
+    let avatar = '';
+    const type = String(req.headers['content-type'] || '');
+    if (/multipart\/form-data/i.test(type)) {
+      const raw = await files.readLimited(req, AVATAR_MAX_BYTES, 'Emoticon must be under 400 KB.');
+      const parsed = files.parseMultipartFile(raw, type);
+      name = readPlayerName(parsed.fields && parsed.fields.name);
+      message = typeof parsed.fields?.message === 'string'
+        ? parsed.fields.message.trim().slice(0, GUESTBOOK_MSG_MAX)
+        : '';
+      avatar = await storeAvatarUpload(event.id, parsed.buffer);
+    } else {
+      name = readPlayerName(req.body?.name);
+      message = typeof req.body?.message === 'string' ? req.body.message.trim().slice(0, GUESTBOOK_MSG_MAX) : '';
+      avatar = guestbook.cleanAvatar(req.body?.avatar);
+    }
     if (!name) return res.status(400).json({ error: 'Please enter your name.' });
-    const message = typeof req.body?.message === 'string' ? req.body.message.trim().slice(0, GUESTBOOK_MSG_MAX) : '';
     if (!message) return res.status(400).json({ error: 'Please write a short message.' });
 
-    guestbook.add(uid(), event.id, name, message);
+    guestbook.add(uid(), event.id, name, message, avatar);
     res.status(201).json({ entries: guestbook.serialize(guestbook.list(event.id)) });
   } catch (err) {
-    console.error('POST guestbook:', err);
-    res.status(500).json({ error: 'Unable to save guest book entry.' });
+    const status = err.status || 500;
+    if (status >= 500) console.error('POST guestbook:', err);
+    const message = status >= 500 ? 'Unable to save guest book entry.' : (err.message || 'Could not save your message.');
+    res.status(status).json({ error: message });
   }
 });
 

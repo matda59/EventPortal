@@ -57,6 +57,17 @@
         <label for="guestbook-name" class="field-label">Your name</label>
         <input id="guestbook-name" class="text-input" type="text" maxlength="30"
                placeholder="Enter your name…" autocomplete="name" />
+        <div class="avatar-field">
+          <span class="field-label" id="avatar-label">Avatar</span>
+          <div id="avatar-choices" class="avatar-choices" role="listbox" aria-labelledby="avatar-label"></div>
+          <div class="avatar-upload-row">
+            <label class="avatar-upload" for="guestbook-avatar-file">Upload an emoticon</label>
+            <input id="guestbook-avatar-file" type="file"
+                   accept="image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp" />
+            <button type="button" id="avatar-clear" class="avatar-clear" hidden>Remove</button>
+          </div>
+          <img id="avatar-preview" class="avatar-preview" alt="Your emoticon" hidden />
+        </div>
         <label for="guestbook-message" class="field-label" style="margin-top:14px">Your message</label>
         <textarea id="guestbook-message" class="text-input guestbook-message" maxlength="280"
                   placeholder="Write a short message…" rows="3"></textarea>
@@ -68,7 +79,7 @@
 
     <section id="screen-gallery" class="screen card">
       <h1 class="title">Gallery</h1>
-      <p class="lead">Add a photo or video from the event. Everyone at the party can see it here.</p>
+      <p class="lead">Add a photo or video from the event. Tap one to view it larger.</p>
       <form id="gallery-form" class="name-form gallery-form" novalidate>
         <label for="gallery-name" class="field-label">Your name</label>
         <input id="gallery-name" class="text-input" type="text" maxlength="30"
@@ -141,6 +152,24 @@
     </section>
 
   </main>
+
+  <div id="lightbox" class="lightbox" hidden>
+    <div class="lightbox-bar">
+      <p id="lightbox-caption" class="lightbox-caption"></p>
+      <div class="lightbox-tools">
+        <button type="button" id="lightbox-prev" title="Previous">‹</button>
+        <button type="button" id="lightbox-out" title="Zoom out">−</button>
+        <button type="button" id="lightbox-fit" title="Fit to screen">Fit</button>
+        <button type="button" id="lightbox-in" title="Zoom in">+</button>
+        <button type="button" id="lightbox-next" title="Next">›</button>
+        <button type="button" id="lightbox-close" title="Close">✕</button>
+      </div>
+    </div>
+    <div id="lightbox-stage" class="lightbox-stage">
+      <img id="lightbox-img" alt="" />
+      <video id="lightbox-video" controls playsinline hidden></video>
+    </div>
+  </div>
 
   <script src="/app.js"></script>
 </body>

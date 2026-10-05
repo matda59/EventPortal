@@ -172,14 +172,14 @@ function removeEventMedia(eventId) {
   fs.rmSync(path.join(MUSIC_DIR, id), { recursive: true, force: true });
 }
 
-async function readLimited(req, limit) {
+async function readLimited(req, limit, tooLargeMessage) {
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
     if (size > limit) {
       req.destroy();
-      const err = new Error('File is too large (max 25 MB).');
+      const err = new Error(tooLargeMessage || 'File is too large (max 25 MB).');
       err.status = 400;
       throw err;
     }
