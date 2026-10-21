@@ -233,7 +233,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background-size: cover;
   background-position: center;
 }
-.intro-preview-edit .intro-preview-stage { height: 420px; }
+.intro-preview-edit .intro-preview-stage { height: 480px; overflow: visible; }
 .intro-preview-stage.has-bg {
   background-color: #fbf6ef;
 }
@@ -249,6 +249,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .intro-preview-edit .intro-polaroid { width: 110px; }
 .intro-preview-edit .polaroid-edit:hover { z-index: 6; }
+.polaroid-edit.has-photo .intro-polaroid-photo { cursor: zoom-in; }
 .intro-polaroid-photo {
   position: relative;
   width: 100%;
@@ -301,6 +302,63 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-family: inherit;
 }
 .polaroid-cap:focus { outline: none; color: #0f172a; }
+.polaroid-size {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+.polaroid-edit.has-photo .polaroid-size { display: flex; }
+.polaroid-size span {
+  flex: none;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #64748b;
+}
+.polaroid-size input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: #b83b26;
+  cursor: pointer;
+}
+.polaroid-change {
+  display: none;
+  width: 100%;
+  margin-top: 2px;
+  border: 0;
+  background: transparent;
+  color: #b83b26;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+.polaroid-edit.has-photo .polaroid-change { display: block; }
+.polaroid-change:hover { text-decoration: underline; }
+.modal.photo-lightbox {
+  width: min(960px, 100%);
+  text-align: center;
+  background: #0f172a;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.photo-lightbox img,
+.photo-lightbox video {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 64vh;
+  margin: 0 auto 12px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #000;
+}
+.photo-lightbox p { margin-bottom: 12px; }
+.photo-lightbox .btn-ghost { color: #fff; border-color: rgba(255, 255, 255, 0.4); }
+.photo-lightbox .btn-ghost:hover:not(:disabled) { color: #0f172a; }
 .intro-pos-1 { top: 7%; left: 4%; --rot: -8deg; }
 .intro-pos-2 { top: 7%; right: 4%; --rot: 7deg; }
 .intro-pos-3 { top: 38%; left: 2%; --rot: 5deg; }

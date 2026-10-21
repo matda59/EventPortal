@@ -43,7 +43,7 @@ After a pull, confirm the new image with `http://<unraid>:4546/api/version` — 
 
 In `/admin` → Event:
 
-- **draft** — hidden from guests (same 404 as a missing slug)
+- **draft** — guests who open the link see “this event is not activated yet” (a missing slug still says event not found)
 - **active** — live at `/e/<slug>`
 - **ended** — guests see “this event has ended”
 - **Enable quiz** off — e-card and welcome only

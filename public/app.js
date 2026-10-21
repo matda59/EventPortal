@@ -74,14 +74,18 @@
     };
   }
 
-  function showUnavailable({ title, subtitle, message, heroImage }) {
+  function showUnavailable({ title, subtitle, message, heroImage, emoji }) {
     document.title = title;
-    const emoji = ((state.config && state.config.meta) || {}).headerEmoji || '';
-    if ($('home-emoji')) $('home-emoji').textContent = emoji;
+    const mark = emoji != null ? emoji : (((state.config && state.config.meta) || {}).headerEmoji || '');
+    if ($('home-emoji')) $('home-emoji').textContent = mark;
     if ($('home-name')) $('home-name').textContent = title;
     if ($('home-kicker')) $('home-kicker').textContent = subtitle || '';
     if ($('home-description')) $('home-description').textContent = message || '';
     if ($('home-nav')) $('home-nav').innerHTML = '';
+    const poles = $('home-polaroids');
+    if (poles) poles.innerHTML = '';
+    const home = $('screen-home');
+    if (home) home.classList.remove('has-polaroids');
     applyPageBackground(heroImage);
     const hero = $('home-hero');
     if (hero) {
@@ -210,10 +214,24 @@
       if (res.status === 404) {
         showUnavailable({
           title:   'Event not found',
-          message: 'This event link may be invalid or is not available yet.',
+          message: 'This event link is invalid.',
         });
         setupMp3Player();
         return;
+      }
+      if (res.status === 403) {
+        let data = null;
+        try { data = await res.json(); } catch { data = null; }
+        if (data && data.code === 'not_activated') {
+          showUnavailable({
+            title:   data.eventName || 'Event is not activated',
+            message: 'This event is not activated yet. It will be available here once the host sets the status to active.',
+            emoji:   data.headerEmoji || '',
+          });
+          setupMp3Player();
+          return;
+        }
+        throw new Error((data && data.error) || 'Event is not available.');
       }
       if (!res.ok) throw new Error(`Config not found (${res.status})`);
       state.config = await res.json();
@@ -297,6 +315,8 @@
       hero.removeAttribute('src');
     }
 
+    renderSidePolaroids();
+
     const nav = $('home-nav');
     if (!nav) return;
     nav.innerHTML = '';
@@ -360,6 +380,62 @@
     });
   }
 
+  function polaroidScale(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 100;
+    return Math.min(200, Math.max(60, Math.round(n)));
+  }
+
+  function renderSidePolaroids() {
+    const host = $('home-polaroids');
+    const screen = $('screen-home');
+    if (!host || !screen) return;
+    const photos = ((state.config && state.config.ecard) || {}).photos;
+    const list = Array.isArray(photos) ? photos.slice(0, 6) : [];
+    const show = guestFlags().enableGallery;
+    const html = show ? list.map((p, i) => {
+      if (!p || !p.src) return '';
+      const video = isVideoSrc(p.src);
+      const src = escHtml(p.src);
+      const cap = escHtml(p.caption || '');
+      const media = video
+        ? `<video src="${src}" muted playsinline></video>`
+        : `<img src="${src}" alt="${cap}" />`;
+      return `<button type="button" class="home-polaroid home-pos-${i + 1}" style="--polaroid-scale:${polaroidScale(p.size)}" data-enlarge data-src="${src}" data-caption="${cap}" data-video="${video ? '1' : '0'}">${media}${cap ? `<span>${cap}</span>` : ''}</button>`;
+    }).join('') : '';
+    host.innerHTML = html;
+    screen.classList.toggle('has-polaroids', !!html);
+  }
+
+  function openLightbox(src, caption, video) {
+    const box = $('lightbox');
+    const media = $('lightbox-media');
+    const cap = $('lightbox-caption');
+    if (!box || !media || !src) return;
+    media.innerHTML = video
+      ? `<video src="${escHtml(src)}" controls playsinline></video>`
+      : `<img src="${escHtml(src)}" alt="${escHtml(caption || '')}" />`;
+    if (cap) {
+      cap.textContent = caption || '';
+      cap.hidden = !caption;
+    }
+    box.hidden = false;
+  }
+
+  function closeLightbox() {
+    const box = $('lightbox');
+    if (!box || box.hidden) return;
+    box.hidden = true;
+    const media = $('lightbox-media');
+    if (media) media.innerHTML = '';
+  }
+
+  function onEnlargeClick(e) {
+    const btn = e.target.closest('[data-enlarge]');
+    if (!btn) return;
+    openLightbox(btn.getAttribute('data-src'), btn.getAttribute('data-caption') || '', btn.getAttribute('data-video') === '1');
+  }
+
   function goHome() {
     renderHome();
     showScreen('home');
@@ -383,10 +459,14 @@
         grid.innerHTML = items.map((p) => {
           const src = escHtml(p.src);
           const cap = p.caption ? escHtml(p.caption) : '';
-          const media = isVideoSrc(p.src)
+          const video = isVideoSrc(p.src);
+          const media = video
             ? `<video src="${src}" controls playsinline></video>`
             : `<img src="${src}" alt="${cap}" />`;
-          return `<figure class="gallery-item">${media}${cap ? `<figcaption>${cap}</figcaption>` : ''}</figure>`;
+          const zoom = video
+            ? media
+            : `<button type="button" class="gallery-zoom" data-enlarge data-src="${src}" data-caption="${cap}">${media}</button>`;
+          return `<figure class="gallery-item">${zoom}${cap ? `<figcaption>${cap}</figcaption>` : ''}</figure>`;
         }).join('');
       }
     }
@@ -407,6 +487,11 @@
 
   // ── Welcome / name entry ───────────────────────────────────────────
   function wireEvents() {
+    $('home-polaroids')?.addEventListener('click', onEnlargeClick);
+    $('gallery-grid')?.addEventListener('click', onEnlargeClick);
+    $('lightbox-close')?.addEventListener('click', closeLightbox);
+    $('lightbox-backdrop')?.addEventListener('click', closeLightbox);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
     $('nav-home')?.addEventListener('click', goHome);
     $('results-home')?.addEventListener('click', goHome);
     $('guestbook-form')?.addEventListener('submit', onGuestbookSubmit);
