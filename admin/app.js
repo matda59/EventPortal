@@ -188,6 +188,8 @@
     return `<img src="${esc(src)}" alt="">`;
   }
 
+  const MAX_POLAROIDS = 8;
+
   function polaroidScale(value) {
     const n = Number(value);
     if (!Number.isFinite(n)) return 100;
@@ -198,24 +200,86 @@
     return Math.round(polaroidScale(scale) * 1.1);
   }
 
+  function storedPolaroids(list) {
+    const photos = Array.isArray(list) ? list : [];
+    return photos
+      .filter((p) => p && (String(p.src || '').trim() || String(p.caption || '').trim()))
+      .slice(0, MAX_POLAROIDS)
+      .map((p) => ({
+        src: p.src || '',
+        caption: p.caption || '',
+        size: polaroidScale(p.size),
+      }));
+  }
+
+  function ensurePolaroidList() {
+    if (!state.detail) state.detail = { event: {}, quiz: { ecard: {} }, questions: [] };
+    if (!state.detail.quiz) state.detail.quiz = { ecard: {} };
+    if (!state.detail.quiz.ecard) state.detail.quiz.ecard = {};
+    if (!state.detail._polaroidsReady) {
+      state.detail.quiz.ecard.photos = storedPolaroids(state.detail.quiz.ecard.photos);
+      state.detail._polaroidsReady = true;
+    }
+    if (!Array.isArray(state.detail.quiz.ecard.photos)) state.detail.quiz.ecard.photos = [];
+    return state.detail.quiz.ecard.photos;
+  }
+
+  function readPolaroidsFromDom() {
+    return Array.from(document.querySelectorAll('#look-stage [data-polaroid]')).map((fig) => {
+      const src = fig.querySelector('[data-photo-src]');
+      const cap = fig.querySelector('[data-photo-cap]');
+      const range = fig.querySelector('[data-polaroid-size]');
+      const size = fig.querySelector('[data-photo-size]');
+      return {
+        src: src ? src.value : '',
+        caption: cap ? cap.value : '',
+        size: polaroidScale(range ? range.value : (size ? size.value : fig.getAttribute('data-size'))),
+      };
+    });
+  }
+
+  function syncEventDraft() {
+    if (!document.getElementById('ev-name')) return;
+    ensurePolaroidList();
+    const ev = state.detail.event || (state.detail.event = {});
+    ev.name = val('ev-name');
+    ev.slug = val('ev-slug');
+    ev.description = val('ev-description');
+    const occasionSel = val('ev-occasion');
+    ev.occasionType = occasionSel === 'Other' ? (val('ev-occasion-custom').trim() || 'Other') : occasionSel;
+    ev.eventDate = val('ev-date') || '';
+    ev.status = val('ev-status') || ev.status || 'draft';
+    ev.headerEmoji = val('ev-emoji');
+    ev.enableQuiz = val('ev-quiz');
+    ev.enableLeaderboard = val('ev-hof');
+    ev.enableGallery = val('ev-gallery');
+    ev.enableMusic = val('ev-music');
+    ev.enableGuestbook = val('ev-guestbook');
+    ev.themePreset = val('ev-preset') || 'custom';
+    ev.theme = readThemeFromForm();
+    state.detail.quiz.heroImage = val('ev-bg') || '';
+    state.detail.quiz.ecard.photos = readPolaroidsFromDom();
+  }
+
   function eventLookHtml(opts) {
-    const photos = Array.from({ length: 6 }, (_, i) => (opts && opts.photos && opts.photos[i]) || { src: '', caption: '', size: 100 });
+    const photos = (opts && opts.photos) || [];
     const bg = (opts && opts.bgImage) || '';
     const name = (opts && opts.name) || 'Event name';
     const desc = (opts && opts.description) || '';
     const polaroids = photos.map((p, i) => {
       const scale = polaroidScale(p.size);
       return `
-      <figure class="intro-polaroid intro-pos-${i + 1} polaroid-edit ${p.src ? 'has-photo' : ''}" data-polaroid="${i}" style="width:${polaroidWidth(scale)}px">
-        <button type="button" class="polaroid-clear" data-clear-polaroid="${i}" ${p.src ? '' : 'hidden'} aria-label="Remove photo">×</button>
+      <figure class="intro-polaroid intro-pos-${i + 1} polaroid-edit ${p.src ? 'has-photo' : ''}" data-polaroid="${i}" data-size="${scale}" style="width:${polaroidWidth(scale)}px">
+        <button type="button" class="polaroid-clear" data-remove-polaroid="${i}" aria-label="Remove polaroid">×</button>
         <button type="button" class="intro-polaroid-photo" data-polaroid-photo="${i}" title="${p.src ? 'View larger' : 'Add a photo'}">${mediaThumbHtml(p.src)}</button>
-        <input class="polaroid-cap" id="photo-cap-${i}" value="${esc(p.caption || '')}" placeholder="Caption" maxlength="80" />
+        <input class="polaroid-cap" data-photo-cap value="${esc(p.caption || '')}" placeholder="Caption" maxlength="80" />
         <label class="polaroid-size">
           <span>Size</span>
-          <input type="range" id="photo-size-${i}" min="60" max="200" value="${scale}" data-polaroid-size="${i}" aria-label="Polaroid ${i + 1} size" />
+          <input type="range" min="60" max="200" value="${scale}" data-polaroid-size="${i}" aria-label="Polaroid ${i + 1} size" />
         </label>
+        <input type="hidden" data-photo-size value="${scale}" />
         <button type="button" class="polaroid-change" data-pick-polaroid="${i}" ${p.src ? '' : 'hidden'}>Replace</button>
-        <input type="hidden" id="photo-src-${i}" value="${esc(p.src || '')}" />
+        <input type="hidden" data-photo-src value="${esc(p.src || '')}" />
       </figure>`;
     }).join('');
     const bgCss = bg ? ` style="background-image:linear-gradient(rgba(251,246,239,0.55), rgba(251,246,239,0.72)), url('${String(bg).replace(/'/g, '%27')}')"` : '';
@@ -232,6 +296,10 @@
               <button type="button" class="btn btn-ghost btn-sm" id="clear-bg" ${bg ? '' : 'hidden'}>Remove</button>
             </div>
           </div>
+        </div>
+        <div class="polaroid-toolbar">
+          <button type="button" class="btn btn-ghost btn-sm" id="add-polaroid" ${photos.length >= MAX_POLAROIDS ? 'disabled' : ''}>Add polaroid</button>
+          <span class="hint">${photos.length ? photos.length + ' of ' + MAX_POLAROIDS : 'Add a polaroid, then choose its photo and size.'}</span>
         </div>
       </div>`;
   }
@@ -527,9 +595,9 @@
         </div>
         <div class="span-2">
           <h2 class="section-title">Photos &amp; background</h2>
-          <p class="hint">Click a Polaroid on the left or right to add a photo from this event’s media. Guests see those Polaroids around the event home, and again in the gallery. Use the centre button for the page background. Save the event to publish them.</p>
+          <p class="hint">Add only the Polaroids you want, using this event’s media. Drag Size, then save — that size is what guests see. Click a photo to enlarge it. The × removes that Polaroid. Use the centre button for the page background.</p>
           ${eventLookHtml({
-            photos: ((state.detail && state.detail.quiz && state.detail.quiz.ecard) || {}).photos,
+            photos: ensurePolaroidList(),
             bgImage: (state.detail && state.detail.quiz && state.detail.quiz.heroImage) || '',
             name: ev.name || 'Event name',
             description: ev.description || '',
@@ -970,6 +1038,7 @@
   function bindEditor(isNew) {
     $app.querySelectorAll('[data-tab]').forEach((btn) => {
       btn.addEventListener('click', async () => {
+        syncEventDraft();
         state.tab = btn.getAttribute('data-tab');
         if (state.tab === 'scores' && !(state.detail && state.detail.scores)) await loadScores();
         if (state.tab === 'guestbook' && !(state.detail && state.detail.guestbook)) await loadGuestbook();
@@ -1094,25 +1163,37 @@
     $app.querySelectorAll('.q-card').forEach((card) => bindQuestionCard(card));
   }
 
+  function polaroidFigure(i) {
+    return document.querySelector('#look-stage [data-polaroid="' + i + '"]');
+  }
+
   function setPolaroidSrc(i, url) {
-    const hidden = document.getElementById('photo-src-' + i);
+    const fig = polaroidFigure(i);
+    if (!fig) return;
+    const hidden = fig.querySelector('[data-photo-src]');
     if (hidden) hidden.value = url || '';
-    const photo = document.querySelector('[data-polaroid-photo="' + i + '"]');
+    const photo = fig.querySelector('[data-polaroid-photo]');
     if (photo) {
       photo.innerHTML = mediaThumbHtml(url);
       photo.title = url ? 'View larger' : 'Add a photo';
     }
-    const fig = document.querySelector('[data-polaroid="' + i + '"]');
-    if (fig) fig.classList.toggle('has-photo', !!url);
-    const clear = document.querySelector('[data-clear-polaroid="' + i + '"]');
-    if (clear) clear.hidden = !url;
-    const change = document.querySelector('[data-pick-polaroid="' + i + '"]');
+    fig.classList.toggle('has-photo', !!url);
+    const change = fig.querySelector('[data-pick-polaroid]');
     if (change) change.hidden = !url;
+    const list = ensurePolaroidList();
+    if (list[i]) list[i].src = url || '';
   }
 
   function setPolaroidSize(i, scale) {
-    const fig = document.querySelector('[data-polaroid="' + i + '"]');
-    if (fig) fig.style.width = polaroidWidth(scale) + 'px';
+    const size = polaroidScale(scale);
+    const fig = polaroidFigure(i);
+    if (!fig) return;
+    fig.dataset.size = String(size);
+    fig.style.width = polaroidWidth(size) + 'px';
+    const hidden = fig.querySelector('[data-photo-size]');
+    if (hidden) hidden.value = String(size);
+    const list = ensurePolaroidList();
+    if (list[i]) list[i].size = size;
   }
 
   function openPhotoLightbox(src, caption) {
@@ -1155,34 +1236,53 @@
     if (clear) clear.hidden = !url;
   }
 
+  function refreshPolaroids(next, pickIndex) {
+    syncEventDraft();
+    ensurePolaroidList();
+    state.detail.quiz.ecard.photos = next;
+    renderEditor();
+    if (pickIndex != null) openPicker('image', (url) => setPolaroidSrc(pickIndex, url));
+  }
+
   function bindEventLook() {
     $app.querySelectorAll('[data-polaroid-photo]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const i = Number(btn.getAttribute('data-polaroid-photo'));
-        const src = val('photo-src-' + i);
+        const fig = polaroidFigure(i);
+        const src = fig && fig.querySelector('[data-photo-src]') ? fig.querySelector('[data-photo-src]').value : '';
         if (!src) {
           openPicker('image', (url) => setPolaroidSrc(i, url));
           return;
         }
-        openPhotoLightbox(src, val('photo-cap-' + i));
+        const cap = fig.querySelector('[data-photo-cap]');
+        openPhotoLightbox(src, cap ? cap.value : '');
       });
     });
     $app.querySelectorAll('[data-polaroid-size]').forEach((input) => {
-      input.addEventListener('input', () => {
-        setPolaroidSize(Number(input.getAttribute('data-polaroid-size')), input.value);
-      });
+      const apply = () => setPolaroidSize(Number(input.getAttribute('data-polaroid-size')), input.value);
+      input.addEventListener('input', apply);
+      input.addEventListener('change', apply);
     });
     $app.querySelectorAll('[data-pick-polaroid]').forEach((btn) => {
       btn.addEventListener('click', () => {
         openPicker('image', (url) => setPolaroidSrc(Number(btn.getAttribute('data-pick-polaroid')), url));
       });
     });
-    $app.querySelectorAll('[data-clear-polaroid]').forEach((btn) => {
+    $app.querySelectorAll('[data-remove-polaroid]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        setPolaroidSrc(Number(btn.getAttribute('data-clear-polaroid')), '');
+        const i = Number(btn.getAttribute('data-remove-polaroid'));
+        const list = readPolaroidsFromDom();
+        list.splice(i, 1);
+        refreshPolaroids(list);
       });
+    });
+    document.getElementById('add-polaroid')?.addEventListener('click', () => {
+      const list = readPolaroidsFromDom();
+      if (list.length >= MAX_POLAROIDS) return;
+      list.push({ src: '', caption: '', size: 100 });
+      refreshPolaroids(list, list.length - 1);
     });
     document.getElementById('pick-bg')?.addEventListener('click', () => {
       openPicker('image', (url) => setBgImage(url));
@@ -1286,11 +1386,10 @@
       themePreset: val('ev-preset') || 'custom',
       theme: readThemeFromForm(),
       bgImage: val('ev-bg') || null,
-      photos: Array.from({ length: 6 }, (_, i) => ({
-        src: val('photo-src-' + i),
-        caption: val('photo-cap-' + i),
-      })),
+      photos: readPolaroidsFromDom(),
     };
+    ensurePolaroidList();
+    state.detail.quiz.ecard.photos = payload.photos;
     try {
       if (isNew) {
         const created = await api('/events', { method: 'POST', body: JSON.stringify(payload) });
@@ -1301,7 +1400,10 @@
       } else {
         const updated = await api('/events/' + state.eventId, { method: 'PUT', body: JSON.stringify(payload) });
         state.detail.event = Object.assign(state.detail.event, updated.event);
-        if (updated.quiz) state.detail.quiz = updated.quiz;
+        if (updated.quiz) {
+          state.detail.quiz = updated.quiz;
+          state.detail._polaroidsReady = false;
+        }
         toast('Event saved');
         renderEditor();
       }

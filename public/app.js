@@ -430,7 +430,7 @@
     const screen = $('screen-home');
     if (!host || !screen) return;
     const photos = ((state.config && state.config.ecard) || {}).photos;
-    const list = Array.isArray(photos) ? photos.slice(0, 6) : [];
+    const list = Array.isArray(photos) ? photos.slice(0, 8) : [];
     const show = guestFlags().enableGallery;
     const html = show ? list.map((p, i) => {
       if (!p || !p.src) return '';

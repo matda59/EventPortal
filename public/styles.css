@@ -303,8 +303,7 @@ body.has-page-bg .site-chrome {
 .home-polaroid {
   pointer-events: auto;
   position: absolute;
-  width: calc(var(--polaroid-scale, 100) * 1.1px);
-  max-width: 30vw;
+  width: calc(var(--polaroid-scale, 100) * 1.15px);
   padding: 8px 8px 12px;
   border: 0;
   border-radius: 4px;
@@ -339,6 +338,8 @@ body.has-page-bg .site-chrome {
 .home-pos-4 { top: 36%; right: 0; --rot: -6deg; }
 .home-pos-5 { bottom: 4%; left: 4%; --rot: 8deg; }
 .home-pos-6 { bottom: 4%; right: 4%; --rot: -7deg; }
+.home-pos-7 { top: 18%; left: 16%; --rot: -3deg; }
+.home-pos-8 { top: 18%; right: 16%; --rot: 4deg; }
 
 .lightbox {
   position: fixed;
@@ -646,8 +647,7 @@ body.lightbox-open { overflow: hidden; }
   }
   .home-polaroid {
     position: static;
-    width: calc(var(--polaroid-scale, 100) * 0.95px);
-    max-width: 42vw;
+    width: min(calc(var(--polaroid-scale, 100) * 1.05px), 70vw);
   }
 }
 @media (max-width: 480px) {
