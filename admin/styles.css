@@ -247,7 +247,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   transform: rotate(var(--rot, 0deg));
   z-index: 2;
 }
-.intro-preview-edit .intro-polaroid { width: 110px; }
 .intro-preview-edit .polaroid-edit:hover { z-index: 6; }
 .polaroid-edit.has-photo .intro-polaroid-photo { cursor: zoom-in; }
 .intro-polaroid-photo {
@@ -303,12 +302,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .polaroid-cap:focus { outline: none; color: #0f172a; }
 .polaroid-size {
-  display: none;
+  display: flex;
   align-items: center;
   gap: 4px;
   margin-top: 2px;
 }
-.polaroid-edit.has-photo .polaroid-size { display: flex; }
 .polaroid-size span {
   flex: none;
   font-size: 0.62rem;
@@ -365,6 +363,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .intro-pos-4 { top: 38%; right: 2%; --rot: -6deg; }
 .intro-pos-5 { bottom: 7%; left: 8%; --rot: 8deg; }
 .intro-pos-6 { bottom: 7%; right: 8%; --rot: -7deg; }
+.intro-pos-7 { top: 20%; left: 20%; --rot: -3deg; }
+.intro-pos-8 { top: 20%; right: 20%; --rot: 4deg; }
+.polaroid-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.polaroid-toolbar .hint { margin: 0; }
 .intro-preview-card {
   position: absolute;
   left: 50%;
@@ -598,5 +605,4 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .playlist-picks { grid-template-columns: 1fr; }
   .span-2 { grid-column: auto; }
   .intro-preview-edit .intro-preview-stage { height: 340px; }
-  .intro-preview-edit .intro-polaroid { width: 76px; }
 }

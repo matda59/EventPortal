@@ -221,7 +221,7 @@ function cleanPhoto(p) {
 
 function cleanPhotos(list) {
   if (!Array.isArray(list)) return null;
-  return list.slice(0, 6).map(cleanPhoto);
+  return list.slice(0, 8).map(cleanPhoto).filter((p) => p.src || p.caption);
 }
 
 function applyQuizLook(eventId, body) {
@@ -592,7 +592,7 @@ router.put('/events/:id/quiz', (req, res) => {
     message:    str(t.message, 400, ''),
   }));
 
-  const photos = Array.isArray(ecard.photos) ? ecard.photos.slice(0, 6).map(cleanPhoto) : [];
+  const photos = Array.isArray(ecard.photos) ? ecard.photos.slice(0, 8).map(cleanPhoto).filter((p) => p.src || p.caption) : [];
 
   const cleanEcard = {
     greeting:    str(ecard.greeting, 120, ''),
