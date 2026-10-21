@@ -188,18 +188,36 @@
     return `<img src="${esc(src)}" alt="">`;
   }
 
+  function polaroidScale(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 100;
+    return Math.min(200, Math.max(60, Math.round(n)));
+  }
+
+  function polaroidWidth(scale) {
+    return Math.round(polaroidScale(scale) * 1.1);
+  }
+
   function eventLookHtml(opts) {
-    const photos = Array.from({ length: 6 }, (_, i) => (opts && opts.photos && opts.photos[i]) || { src: '', caption: '' });
+    const photos = Array.from({ length: 6 }, (_, i) => (opts && opts.photos && opts.photos[i]) || { src: '', caption: '', size: 100 });
     const bg = (opts && opts.bgImage) || '';
     const name = (opts && opts.name) || 'Event name';
     const desc = (opts && opts.description) || '';
-    const polaroids = photos.map((p, i) => `
-      <figure class="intro-polaroid intro-pos-${i + 1} polaroid-edit ${p.src ? 'has-photo' : ''}">
+    const polaroids = photos.map((p, i) => {
+      const scale = polaroidScale(p.size);
+      return `
+      <figure class="intro-polaroid intro-pos-${i + 1} polaroid-edit ${p.src ? 'has-photo' : ''}" data-polaroid="${i}" style="width:${polaroidWidth(scale)}px">
         <button type="button" class="polaroid-clear" data-clear-polaroid="${i}" ${p.src ? '' : 'hidden'} aria-label="Remove photo">×</button>
-        <button type="button" class="intro-polaroid-photo" data-pick-polaroid="${i}" title="Add a photo">${mediaThumbHtml(p.src)}</button>
+        <button type="button" class="intro-polaroid-photo" data-polaroid-photo="${i}" title="${p.src ? 'View larger' : 'Add a photo'}">${mediaThumbHtml(p.src)}</button>
         <input class="polaroid-cap" id="photo-cap-${i}" value="${esc(p.caption || '')}" placeholder="Caption" maxlength="80" />
+        <label class="polaroid-size">
+          <span>Size</span>
+          <input type="range" id="photo-size-${i}" min="60" max="200" value="${scale}" data-polaroid-size="${i}" aria-label="Polaroid ${i + 1} size" />
+        </label>
+        <button type="button" class="polaroid-change" data-pick-polaroid="${i}" ${p.src ? '' : 'hidden'}>Replace</button>
         <input type="hidden" id="photo-src-${i}" value="${esc(p.src || '')}" />
-      </figure>`).join('');
+      </figure>`;
+    }).join('');
     const bgCss = bg ? ` style="background-image:linear-gradient(rgba(251,246,239,0.55), rgba(251,246,239,0.72)), url('${String(bg).replace(/'/g, '%27')}')"` : '';
     return `
       <div class="intro-preview intro-preview-edit">
@@ -553,7 +571,7 @@
               `<button type="button" class="emoji-pick ${(ev.headerEmoji || '🎉') === em ? 'selected' : ''}" data-emoji="${esc(em)}" aria-pressed="${(ev.headerEmoji || '🎉') === em ? 'true' : 'false'}">${em}</button>`).join('')}
           </div>
         </div>
-        <p class="hint span-2">draft is hidden from guests. active is live at /e/slug. ended shows “this event has ended”.</p>
+        <p class="hint span-2">draft tells guests the event is not activated yet. active is live at /e/slug. ended shows “this event has ended”.</p>
         <div class="span-2">
           <h2 class="section-title">Guest features</h2>
           <p class="hint">Turn on what guests can open from the event home page.</p>
@@ -1079,12 +1097,45 @@
   function setPolaroidSrc(i, url) {
     const hidden = document.getElementById('photo-src-' + i);
     if (hidden) hidden.value = url || '';
-    const btn = document.querySelector('[data-pick-polaroid="' + i + '"]');
-    if (btn) btn.innerHTML = mediaThumbHtml(url);
-    const fig = btn && btn.closest('.polaroid-edit');
+    const photo = document.querySelector('[data-polaroid-photo="' + i + '"]');
+    if (photo) {
+      photo.innerHTML = mediaThumbHtml(url);
+      photo.title = url ? 'View larger' : 'Add a photo';
+    }
+    const fig = document.querySelector('[data-polaroid="' + i + '"]');
     if (fig) fig.classList.toggle('has-photo', !!url);
     const clear = document.querySelector('[data-clear-polaroid="' + i + '"]');
     if (clear) clear.hidden = !url;
+    const change = document.querySelector('[data-pick-polaroid="' + i + '"]');
+    if (change) change.hidden = !url;
+  }
+
+  function setPolaroidSize(i, scale) {
+    const fig = document.querySelector('[data-polaroid="' + i + '"]');
+    if (fig) fig.style.width = polaroidWidth(scale) + 'px';
+  }
+
+  function openPhotoLightbox(src, caption) {
+    if (!src) return;
+    const media = isMediaVideo(src)
+      ? `<video src="${esc(src)}" controls playsinline></video>`
+      : `<img src="${esc(src)}" alt="${esc(caption || '')}" />`;
+    $modal.innerHTML = `
+      <div class="modal-backdrop" data-close-modal>
+        <div class="modal photo-lightbox" role="dialog" aria-modal="true" aria-label="Photo">
+          <button class="btn btn-ghost" type="button" data-close-modal>Close</button>
+          ${media}
+          ${caption ? `<p>${esc(caption)}</p>` : ''}
+        </div>
+      </div>`;
+    const close = () => { $modal.innerHTML = ''; document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    $modal.querySelectorAll('[data-close-modal]').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        if (e.target === el) close();
+      });
+    });
   }
 
   function setBgImage(url) {
@@ -1105,6 +1156,22 @@
   }
 
   function bindEventLook() {
+    $app.querySelectorAll('[data-polaroid-photo]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.getAttribute('data-polaroid-photo'));
+        const src = val('photo-src-' + i);
+        if (!src) {
+          openPicker('image', (url) => setPolaroidSrc(i, url));
+          return;
+        }
+        openPhotoLightbox(src, val('photo-cap-' + i));
+      });
+    });
+    $app.querySelectorAll('[data-polaroid-size]').forEach((input) => {
+      input.addEventListener('input', () => {
+        setPolaroidSize(Number(input.getAttribute('data-polaroid-size')), input.value);
+      });
+    });
     $app.querySelectorAll('[data-pick-polaroid]').forEach((btn) => {
       btn.addEventListener('click', () => {
         openPicker('image', (url) => setPolaroidSrc(Number(btn.getAttribute('data-pick-polaroid')), url));

@@ -241,9 +241,16 @@ const submitScoreTx = db.transaction((session) => {
 app.get('/api/events/:slug/public-config', (req, res) => {
   try {
     const event = findEventBySlug(req.params.slug);
-    // Draft and missing look the same so unpublished slugs stay private.
-    if (!event || event.status === 'draft') {
-      return res.status(404).json({ error: 'Event not found or unavailable.' });
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+    if (event.status === 'draft') {
+      return res.status(403).json({
+        error: 'This event is not activated yet.',
+        code: 'not_activated',
+        eventName: event.name,
+        headerEmoji: event.header_emoji || '',
+      });
     }
 
     const quiz = quizForEvent(event.id);

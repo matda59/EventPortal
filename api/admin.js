@@ -205,12 +205,23 @@ function ensureQuiz(eventId, title) {
   return quizByEvent(eventId);
 }
 
-function cleanPhotos(list) {
-  if (!Array.isArray(list)) return null;
-  return list.slice(0, 6).map((p) => ({
+function photoSize(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 100;
+  return Math.min(200, Math.max(60, Math.round(n)));
+}
+
+function cleanPhoto(p) {
+  return {
     src:     str(p?.src, 240, ''),
     caption: str(p?.caption, 80, ''),
-  }));
+    size:    photoSize(p?.size),
+  };
+}
+
+function cleanPhotos(list) {
+  if (!Array.isArray(list)) return null;
+  return list.slice(0, 6).map(cleanPhoto);
 }
 
 function applyQuizLook(eventId, body) {
@@ -581,10 +592,7 @@ router.put('/events/:id/quiz', (req, res) => {
     message:    str(t.message, 400, ''),
   }));
 
-  const photos = Array.isArray(ecard.photos) ? ecard.photos.slice(0, 6).map((p) => ({
-    src:     str(p?.src, 240, ''),
-    caption: str(p?.caption, 80, ''),
-  })) : [];
+  const photos = Array.isArray(ecard.photos) ? ecard.photos.slice(0, 6).map(cleanPhoto) : [];
 
   const cleanEcard = {
     greeting:    str(ecard.greeting, 120, ''),

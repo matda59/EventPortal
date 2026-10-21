@@ -40,14 +40,17 @@
   <main class="app">
 
     <section id="screen-home" class="screen home-screen active">
-      <img id="home-hero" class="hero-image" alt="" hidden />
-      <p class="home-kicker" id="home-kicker"></p>
-      <h1 class="home-title">
-        <span id="home-emoji" class="home-emoji"></span>
-        <span id="home-name">Loading…</span>
-      </h1>
-      <p class="home-desc" id="home-description"></p>
-      <nav id="home-nav" class="home-nav" aria-label="Event menu"></nav>
+      <div id="home-polaroids" class="home-polaroids"></div>
+      <div class="home-copy">
+        <img id="home-hero" class="hero-image" alt="" hidden />
+        <p class="home-kicker" id="home-kicker"></p>
+        <h1 class="home-title">
+          <span id="home-emoji" class="home-emoji"></span>
+          <span id="home-name">Loading…</span>
+        </h1>
+        <p class="home-desc" id="home-description"></p>
+        <nav id="home-nav" class="home-nav" aria-label="Event menu"></nav>
+      </div>
     </section>
 
     <section id="screen-guestbook" class="screen card">
@@ -154,6 +157,11 @@
   </main>
 
   <div id="lightbox" class="lightbox" hidden>
+    <button type="button" class="lightbox-backdrop" id="lightbox-backdrop" aria-label="Close photo"></button>
+    <div class="lightbox-dialog" role="dialog" aria-modal="true" aria-label="Photo">
+      <button type="button" class="lightbox-close" id="lightbox-close">Close</button>
+      <div id="lightbox-media"></div>
+      <p id="lightbox-caption"></p>
     <div class="lightbox-bar">
       <p id="lightbox-caption" class="lightbox-caption"></p>
       <div class="lightbox-tools">
