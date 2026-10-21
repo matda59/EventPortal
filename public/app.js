@@ -16,6 +16,7 @@
   const SESSIONS_URL = `/api/events/${EVENT_SLUG}/sessions`;
   const MUSIC_URL    = `/api/events/${EVENT_SLUG}/music`;
   const GUESTBOOK_URL = `/api/events/${EVENT_SLUG}/guestbook`;
+  const GALLERY_URL = `/api/events/${EVENT_SLUG}/gallery`;
 
   // ── App state ──────────────────────────────────────────────────────
   const state = {
@@ -28,7 +29,19 @@
     grading: false,
     playerName: '',
     sessionId: null,
+    galleryName: '',
+    galleryItems: null,
+    guestbookAvatar: '',
+    guestbookAvatarFile: null,
+    lightboxIndex: 0,
   };
+
+  const AVATARS = [
+    '😊', '😄', '😁', '🥰', '😍', '🤩', '😎', '🤓', '🥳', '😇',
+    '🤗', '😺', '🎉', '🎊', '🎂', '🎈', '🎁', '💖', '✨', '🌟',
+    '🎶', '💃', '🕺', '🥂', '👍', '🙌', '👏', '🔥', '🌸', '🍀',
+    '🐶', '🐱', '🦊', '🐼',
+  ];
 
   // ── Element cache ──────────────────────────────────────────────────
   const $ = (id) => document.getElementById(id);
@@ -54,6 +67,8 @@
     if (screens[name]) screens[name].classList.add('active');
     const chrome = $('site-chrome');
     if (chrome) chrome.hidden = name === 'home';
+    const board = $('photo-board');
+    if (board) board.hidden = name !== 'home' || !board.childElementCount;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -82,10 +97,7 @@
     if ($('home-kicker')) $('home-kicker').textContent = subtitle || '';
     if ($('home-description')) $('home-description').textContent = message || '';
     if ($('home-nav')) $('home-nav').innerHTML = '';
-    const poles = $('home-polaroids');
-    if (poles) poles.innerHTML = '';
-    const home = $('screen-home');
-    if (home) home.classList.remove('has-polaroids');
+    buildPhotoBoard((state.config && state.config.ecard) || {});
     applyPageBackground(heroImage);
     const hero = $('home-hero');
     if (hero) {
@@ -203,6 +215,28 @@
     return photos.filter((p) => p && p.src);
   }
 
+  function buildPhotoBoard(ecard) {
+    const board = $('photo-board');
+    if (!board) return;
+    const photos = (ecard && Array.isArray(ecard.photos)) ? ecard.photos.slice(0, 6) : [];
+    board.innerHTML = '';
+    photos.forEach((p, i) => {
+      if (!p || !p.src) return;
+      const fig = document.createElement('figure');
+      fig.className = 'polaroid pos-' + (i + 1);
+      const caption = p.caption ? escHtml(p.caption) : '';
+      const src = escHtml(p.src);
+      const media = isVideoSrc(p.src)
+        ? `<video src="${src}" muted playsinline autoplay loop></video>`
+        : `<img src="${src}" alt="${caption}" />`;
+      fig.innerHTML =
+        `<div class="polaroid-photo">${media}</div>` +
+        (caption ? `<figcaption>${caption}</figcaption>` : '');
+      board.appendChild(fig);
+    });
+    board.hidden = !board.childElementCount;
+  }
+
   function isVideoSrc(src) {
     return /\.(mp4|webm|ogg|mov)(\?|$)/i.test(src || '');
   }
@@ -284,6 +318,9 @@
     applyGuestFlags();
     setupMp3Player();
     wireEvents();
+    if (guestFlags().enableGallery) {
+      try { await loadGalleryItems(); } catch { state.galleryItems = null; }
+    }
     renderHome();
     showScreen('home');
   }
@@ -298,6 +335,7 @@
 
     fillChrome(meta);
     applyPageBackground(meta.bgImage || meta.heroImage);
+    buildPhotoBoard(ecard);
     if ($('home-emoji')) $('home-emoji').textContent = meta.headerEmoji || '';
     if ($('home-name')) $('home-name').textContent = eventLabel();
     if ($('home-kicker')) {
@@ -339,13 +377,14 @@
       });
     }
     if (f.enableGallery) {
+      const count = Array.isArray(state.galleryItems) ? state.galleryItems.length : items.length;
       tiles.push({
         id: 'gallery',
         emoji: '📷',
         title: 'Gallery',
-        hint: items.length
-          ? `${items.length} photo${items.length === 1 ? '' : 's'} & clips`
-          : 'Photos and videos',
+        hint: count
+          ? `${count} photo${count === 1 ? '' : 's'} & clips · add yours`
+          : 'Add a photo or video',
       });
     }
     if (f.enableLeaderboard) {
@@ -449,28 +488,282 @@
     if (guestFlags().enableQuiz) setTimeout(() => $('player-name') && $('player-name').focus(), 300);
   }
 
-  function openGallery() {
-    const items = galleryItems((state.config && state.config.ecard) || {});
+  function galleryCaption(item) {
+    const name = item.name ? escHtml(item.name) : '';
+    const cap = item.caption ? escHtml(item.caption) : '';
+    if (name && cap) return `<figcaption><strong>${name}</strong> ${cap}</figcaption>`;
+    if (name) return `<figcaption><strong>${name}</strong></figcaption>`;
+    if (cap) return `<figcaption>${cap}</figcaption>`;
+    return '';
+  }
+
+  function renderGalleryGrid(items) {
     const grid = $('gallery-grid');
-    if (grid) {
-      if (!items.length) {
-        grid.innerHTML = '<p class="hof-empty">No photos or videos yet.</p>';
-      } else {
-        grid.innerHTML = items.map((p) => {
-          const src = escHtml(p.src);
-          const cap = p.caption ? escHtml(p.caption) : '';
-          const video = isVideoSrc(p.src);
-          const media = video
-            ? `<video src="${src}" controls playsinline></video>`
-            : `<img src="${src}" alt="${cap}" />`;
-          const zoom = video
-            ? media
-            : `<button type="button" class="gallery-zoom" data-enlarge data-src="${src}" data-caption="${cap}">${media}</button>`;
-          return `<figure class="gallery-item">${zoom}${cap ? `<figcaption>${cap}</figcaption>` : ''}</figure>`;
-        }).join('');
+    if (!grid) return;
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) {
+      grid.innerHTML = '<p class="hof-empty">No photos or videos yet. Add the first one.</p>';
+      return;
+    }
+    grid.innerHTML = list.map((p, i) => {
+      const src = escHtml(p.src);
+      const label = escHtml(p.caption || p.name || 'View larger');
+      const media = isVideoSrc(p.src)
+        ? `<video src="${src}" muted playsinline></video>`
+        : `<img src="${src}" alt="" />`;
+      return `<figure class="gallery-item">
+        <button type="button" class="gallery-open" data-gallery-open="${i}" aria-label="${label}">${media}</button>
+        ${galleryCaption(p)}
+      </figure>`;
+    }).join('');
+  }
+
+  async function loadGalleryItems() {
+    if (!guestFlags().enableGallery) {
+      state.galleryItems = [];
+      return [];
+    }
+    const data = await apiJson(GALLERY_URL);
+    state.galleryItems = Array.isArray(data.items) ? data.items : [];
+    return state.galleryItems;
+  }
+
+  async function openGallery() {
+    const errEl = $('gallery-error');
+    if (errEl) errEl.hidden = true;
+    if (state.galleryName && $('gallery-name')) $('gallery-name').value = state.galleryName;
+    showScreen('gallery');
+    const grid = $('gallery-grid');
+    if (grid && !state.galleryItems) grid.innerHTML = '<p class="hof-empty">Loading…</p>';
+    else renderGalleryGrid(state.galleryItems || []);
+    try {
+      renderGalleryGrid(await loadGalleryItems());
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = err.message || 'Unable to read gallery.';
+        errEl.hidden = false;
       }
     }
-    showScreen('gallery');
+  }
+
+  async function onGallerySubmit(e) {
+    e.preventDefault();
+    const errEl = $('gallery-error');
+    const btn = $('gallery-submit');
+    const name = $('gallery-name').value.trim();
+    const caption = $('gallery-caption').value.trim();
+    const file = $('gallery-file').files && $('gallery-file').files[0];
+    if (!name) {
+      errEl.textContent = 'Please enter your name.';
+      errEl.hidden = false;
+      $('gallery-name').focus();
+      return;
+    }
+    if (!file) {
+      errEl.textContent = 'Choose a photo or video.';
+      errEl.hidden = false;
+      return;
+    }
+    const body = new FormData();
+    body.append('name', name);
+    body.append('caption', caption);
+    body.append('file', file);
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Uploading…';
+    }
+    try {
+      const data = await apiJson(GALLERY_URL, { method: 'POST', body });
+      state.galleryName = name;
+      state.galleryItems = Array.isArray(data.items) ? data.items : [];
+      $('gallery-caption').value = '';
+      $('gallery-file').value = '';
+      if (errEl) errEl.hidden = true;
+      renderGalleryGrid(state.galleryItems);
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = err.message || 'Unable to save gallery upload.';
+        errEl.hidden = false;
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Add to gallery';
+      }
+    }
+  }
+
+  const lightbox = {
+    scale: 1,
+    x: 0,
+    y: 0,
+    pointers: new Map(),
+    drag: null,
+    pinchDist: 0,
+    pinchScale: 1,
+  };
+
+  function lightboxMedia() {
+    const video = $('lightbox-video');
+    const img = $('lightbox-img');
+    if (video && !video.hidden) return video;
+    return img;
+  }
+
+  function applyLightboxTransform() {
+    const media = lightboxMedia();
+    if (!media) return;
+    media.style.transform = `translate(${lightbox.x}px, ${lightbox.y}px) scale(${lightbox.scale})`;
+  }
+
+  function resetLightboxZoom() {
+    lightbox.scale = 1;
+    lightbox.x = 0;
+    lightbox.y = 0;
+    applyLightboxTransform();
+  }
+
+  function setLightboxZoom(next) {
+    lightbox.scale = Math.min(5, Math.max(1, next));
+    if (lightbox.scale <= 1) {
+      lightbox.scale = 1;
+      lightbox.x = 0;
+      lightbox.y = 0;
+    }
+    applyLightboxTransform();
+  }
+
+  function showLightboxItem(index) {
+    const items = state.galleryItems || [];
+    if (!items.length) return;
+    const next = (index + items.length) % items.length;
+    state.lightboxIndex = next;
+    const item = items[next];
+    const img = $('lightbox-img');
+    const video = $('lightbox-video');
+    const caption = $('lightbox-caption');
+    const bits = [item.name, item.caption].filter(Boolean);
+    if (caption) caption.textContent = bits.join(' · ');
+    resetLightboxZoom();
+    if (isVideoSrc(item.src)) {
+      if (img) { img.hidden = true; img.removeAttribute('src'); }
+      if (video) {
+        video.hidden = false;
+        video.src = item.src;
+        video.play().catch(() => {});
+      }
+    } else {
+      if (video) {
+        video.pause();
+        video.hidden = true;
+        video.removeAttribute('src');
+      }
+      if (img) {
+        img.hidden = false;
+        img.src = item.src;
+        img.alt = item.caption || item.name || 'Photo';
+      }
+    }
+    const box = $('lightbox');
+    if (box) box.hidden = false;
+    document.body.classList.add('lightbox-open');
+  }
+
+  function closeLightbox() {
+    const box = $('lightbox');
+    if (box) box.hidden = true;
+    document.body.classList.remove('lightbox-open');
+    const video = $('lightbox-video');
+    if (video) {
+      video.pause();
+      video.removeAttribute('src');
+    }
+    const img = $('lightbox-img');
+    if (img) img.removeAttribute('src');
+    resetLightboxZoom();
+  }
+
+  function onGalleryOpen(e) {
+    const btn = e.target.closest('[data-gallery-open]');
+    if (!btn) return;
+    showLightboxItem(Number(btn.getAttribute('data-gallery-open')) || 0);
+  }
+
+  function pinchDistance() {
+    const pts = [...lightbox.pointers.values()];
+    if (pts.length < 2) return 0;
+    const dx = pts[0].x - pts[1].x;
+    const dy = pts[0].y - pts[1].y;
+    return Math.hypot(dx, dy);
+  }
+
+  function wireLightbox() {
+    const stage = $('lightbox-stage');
+    $('lightbox-close')?.addEventListener('click', closeLightbox);
+    $('lightbox-in')?.addEventListener('click', () => setLightboxZoom(lightbox.scale * 1.25));
+    $('lightbox-out')?.addEventListener('click', () => setLightboxZoom(lightbox.scale / 1.25));
+    $('lightbox-fit')?.addEventListener('click', resetLightboxZoom);
+    $('lightbox-prev')?.addEventListener('click', () => showLightboxItem(state.lightboxIndex - 1));
+    $('lightbox-next')?.addEventListener('click', () => showLightboxItem(state.lightboxIndex + 1));
+    stage?.addEventListener('dblclick', () => {
+      if (lightbox.scale > 1) resetLightboxZoom();
+      else setLightboxZoom(2);
+    });
+    stage?.addEventListener('wheel', (e) => {
+      if ($('lightbox')?.hidden) return;
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      setLightboxZoom(lightbox.scale * factor);
+    }, { passive: false });
+    stage?.addEventListener('pointerdown', (e) => {
+      if (e.button != null && e.button !== 0) return;
+      lightbox.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      stage.setPointerCapture(e.pointerId);
+      if (lightbox.pointers.size === 1) {
+        lightbox.drag = { x: e.clientX, y: e.clientY, ox: lightbox.x, oy: lightbox.y, moved: false };
+      } else if (lightbox.pointers.size >= 2) {
+        lightbox.pinchDist = pinchDistance();
+        lightbox.pinchScale = lightbox.scale;
+        lightbox.drag = null;
+      }
+    });
+    stage?.addEventListener('pointermove', (e) => {
+      if (!lightbox.pointers.has(e.pointerId)) return;
+      lightbox.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (lightbox.pointers.size >= 2 && lightbox.pinchDist) {
+        setLightboxZoom(lightbox.pinchScale * (pinchDistance() / lightbox.pinchDist));
+        return;
+      }
+      if (!lightbox.drag || lightbox.scale <= 1) return;
+      const dx = e.clientX - lightbox.drag.x;
+      const dy = e.clientY - lightbox.drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) lightbox.drag.moved = true;
+      lightbox.x = lightbox.drag.ox + dx;
+      lightbox.y = lightbox.drag.oy + dy;
+      stage.classList.add('is-dragging');
+      applyLightboxTransform();
+    });
+    const endPointer = (e) => {
+      lightbox.pointers.delete(e.pointerId);
+      if (lightbox.pointers.size < 2) lightbox.pinchDist = 0;
+      if (lightbox.pointers.size === 0) {
+        stage.classList.remove('is-dragging');
+        const dragged = lightbox.drag && lightbox.drag.moved;
+        lightbox.drag = null;
+        if (!dragged && e.target === stage) closeLightbox();
+      }
+    };
+    stage?.addEventListener('pointerup', endPointer);
+    stage?.addEventListener('pointercancel', endPointer);
+    document.addEventListener('keydown', (e) => {
+      if ($('lightbox')?.hidden) return;
+      if (e.key === 'Escape') closeLightbox();
+      else if (e.key === 'ArrowLeft') showLightboxItem(state.lightboxIndex - 1);
+      else if (e.key === 'ArrowRight') showLightboxItem(state.lightboxIndex + 1);
+      else if (e.key === '+' || e.key === '=') setLightboxZoom(lightbox.scale * 1.25);
+      else if (e.key === '-' || e.key === '_') setLightboxZoom(lightbox.scale / 1.25);
+      else if (e.key === '0') resetLightboxZoom();
+    });
   }
 
   async function openHof() {
@@ -495,6 +788,11 @@
     $('nav-home')?.addEventListener('click', goHome);
     $('results-home')?.addEventListener('click', goHome);
     $('guestbook-form')?.addEventListener('submit', onGuestbookSubmit);
+    $('gallery-form')?.addEventListener('submit', onGallerySubmit);
+    $('gallery-grid')?.addEventListener('click', onGalleryOpen);
+    renderAvatarChoices();
+    wireAvatarPicker();
+    wireLightbox();
 
     $('name-form').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -518,6 +816,87 @@
     $('play-again-btn').addEventListener('click', resetAndRestart);
   }
 
+  function avatarMarkup(avatar) {
+    const value = String(avatar || '');
+    if (!value) return '';
+    if (value.startsWith('/images/')) {
+      return `<img class="gb-avatar" src="${escHtml(value)}" alt="" />`;
+    }
+    return `<span class="gb-avatar" aria-hidden="true">${escHtml(value)}</span>`;
+  }
+
+  function renderAvatarChoices() {
+    const box = $('avatar-choices');
+    if (!box || box.childElementCount) return;
+    box.innerHTML = AVATARS.map((emoji, i) => `
+      <button type="button" class="avatar-choice" role="option" data-avatar-index="${i}" aria-selected="false" aria-label="Avatar ${i + 1}">${emoji}</button>
+    `).join('');
+  }
+
+  function syncAvatarChoice() {
+    const fileChosen = !!state.guestbookAvatarFile;
+    document.querySelectorAll('.avatar-choice').forEach((btn) => {
+      const emoji = AVATARS[Number(btn.getAttribute('data-avatar-index'))];
+      const on = !fileChosen && emoji === state.guestbookAvatar;
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    const preview = $('avatar-preview');
+    const clearBtn = $('avatar-clear');
+    if (preview) preview.hidden = !fileChosen;
+    if (clearBtn) clearBtn.hidden = !fileChosen;
+  }
+
+  function wireAvatarPicker() {
+    $('avatar-choices')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-avatar-index]');
+      if (!btn) return;
+      state.guestbookAvatar = AVATARS[Number(btn.getAttribute('data-avatar-index'))] || '';
+      clearAvatarFile();
+      syncAvatarChoice();
+    });
+    $('guestbook-avatar-file')?.addEventListener('change', () => {
+      const file = $('guestbook-avatar-file').files && $('guestbook-avatar-file').files[0];
+      if (!file) {
+        clearAvatarFile();
+        syncAvatarChoice();
+        return;
+      }
+      if (file.size > 400 * 1024) {
+        const errEl = $('guestbook-error');
+        if (errEl) {
+          errEl.textContent = 'Emoticon must be under 400 KB.';
+          errEl.hidden = false;
+        }
+        $('guestbook-avatar-file').value = '';
+        return;
+      }
+      state.guestbookAvatarFile = file;
+      const preview = $('avatar-preview');
+      if (preview) {
+        if (preview.src && preview.src.startsWith('blob:')) URL.revokeObjectURL(preview.src);
+        preview.src = URL.createObjectURL(file);
+        preview.hidden = false;
+      }
+      syncAvatarChoice();
+    });
+    $('avatar-clear')?.addEventListener('click', () => {
+      clearAvatarFile();
+      syncAvatarChoice();
+    });
+  }
+
+  function clearAvatarFile() {
+    state.guestbookAvatarFile = null;
+    const input = $('guestbook-avatar-file');
+    if (input) input.value = '';
+    const preview = $('avatar-preview');
+    if (preview) {
+      if (preview.src && preview.src.startsWith('blob:')) URL.revokeObjectURL(preview.src);
+      preview.removeAttribute('src');
+      preview.hidden = true;
+    }
+  }
+
   function renderGuestbookList(entries) {
     const list = $('guestbook-list');
     if (!list) return;
@@ -527,7 +906,7 @@
     }
     list.innerHTML = entries.map((e) => `
       <article class="guestbook-entry">
-        <strong>${escHtml(e.name)}</strong>
+        <div class="guestbook-entry-head">${avatarMarkup(e.avatar)}<strong>${escHtml(e.name)}</strong></div>
         <p>${escHtml(e.message)}</p>
       </article>`).join('');
   }
@@ -541,6 +920,8 @@
       : 'Leave a short note for the hosts.';
     if (state.guestbookName) $('guestbook-name').value = state.guestbookName;
     showScreen('guestbook');
+    const errEl = $('guestbook-error');
+    if (errEl) errEl.hidden = true;
     try {
       const data = await apiJson(GUESTBOOK_URL);
       renderGuestbookList(data.entries);
@@ -572,12 +953,27 @@
       $('guestbook-message').focus();
       return;
     }
+    const file = state.guestbookAvatarFile;
+    if (file && file.size > 400 * 1024) {
+      errEl.textContent = 'Emoticon must be under 400 KB.';
+      errEl.hidden = false;
+      return;
+    }
     try {
-      const data = await apiJson(GUESTBOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, message }),
-      });
+      let data;
+      if (file) {
+        const body = new FormData();
+        body.append('name', name);
+        body.append('message', message);
+        body.append('file', file);
+        data = await apiJson(GUESTBOOK_URL, { method: 'POST', body });
+      } else {
+        data = await apiJson(GUESTBOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, message, avatar: state.guestbookAvatar }),
+        });
+      }
       state.guestbookName = name;
       $('guestbook-message').value = '';
       renderGuestbookList(data.entries);
@@ -824,8 +1220,15 @@
   const mp3 = { tracks: [], index: 0, playing: false, volume: 0.3, audio: null, open: true };
 
   function mp3TrackUrl(name) {
-    if (/^(https?:)?\//.test(name)) return name;
-    return '/music/' + encodeURIComponent(name);
+    const value = String(name || '');
+    if (/^(https?:)?\//.test(value)) return value;
+    return '/music/' + encodeURIComponent(value);
+  }
+
+  function mp3Label(src) {
+    let base = String(src || '').split('/').pop() || 'Track';
+    try { base = decodeURIComponent(base); } catch { /* keep */ }
+    return base.replace(/\.mp3$/i, '').replace(/[_-]+/g, ' ') || 'Track';
   }
 
   async function setupMp3Player() {
@@ -838,7 +1241,7 @@
       const res  = await fetch(MUSIC_URL);
       const files = res.ok ? await res.json() : [];
       mp3.tracks  = files.map((f) => ({
-        name: f.replace(/\.mp3$/i, '').replace(/[_-]+/g, ' '),
+        name: mp3Label(f),
         url:  mp3TrackUrl(f),
       }));
     } catch { mp3.tracks = []; }

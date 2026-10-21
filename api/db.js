@@ -11,6 +11,7 @@ const db = new Database(path.join(DATA_DIR, 'portal.db'));
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+db.pragma('busy_timeout = 5000');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS events (
@@ -100,11 +101,22 @@ db.exec(`
     guest_name TEXT NOT NULL,
     message    TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    avatar     TEXT,
     FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
   );
 
-  CREATE INDEX IF NOT EXISTS idx_guestbook_event
-    ON guestbook_entries(event_id, created_at);
+  CREATE TABLE IF NOT EXISTS gallery_uploads (
+    id         TEXT PRIMARY KEY,
+    event_id   TEXT NOT NULL,
+    guest_name TEXT NOT NULL,
+    caption    TEXT,
+    filename   TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_gallery_event
+    ON gallery_uploads(event_id, created_at);
 
   CREATE TABLE IF NOT EXISTS quiz_answers (
     session_id     TEXT NOT NULL,
@@ -133,5 +145,45 @@ addColumnIfMissing('events', 'enable_gallery', 'enable_gallery INTEGER NOT NULL 
 addColumnIfMissing('events', 'enable_music', 'enable_music INTEGER NOT NULL DEFAULT 1');
 addColumnIfMissing('events', 'enable_guestbook', 'enable_guestbook INTEGER NOT NULL DEFAULT 0');
 addColumnIfMissing('events', 'description', 'description TEXT');
+
+// The guestbook index used to live in the schema script above. If an older
+// table is missing created_at, that statement throws and the process never
+// listens, so the repair in guestbook.js never gets a chance to run.
+function repairGuestbookColumns() {
+  const exists = db.prepare(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'guestbook_entries'"
+  ).get();
+  if (!exists) return;
+  const names = new Set(
+    db.prepare('PRAGMA table_info(guestbook_entries)').all().map((c) => String(c.name).toLowerCase())
+  );
+  const add = (name, ddl, fallbackDdl) => {
+    if (names.has(name)) return;
+    try {
+      db.exec(`ALTER TABLE guestbook_entries ADD COLUMN ${ddl}`);
+    } catch (err) {
+      // SQLite rejects expression defaults when the table already has rows.
+      if (!fallbackDdl || !/non-constant default/i.test(String(err && err.message))) throw err;
+      db.exec(`ALTER TABLE guestbook_entries ADD COLUMN ${fallbackDdl}`);
+    }
+    names.add(name);
+  };
+  add('event_id', 'event_id TEXT');
+  add('guest_name', 'guest_name TEXT');
+  add('message', 'message TEXT');
+  add('created_at', "created_at TEXT DEFAULT (datetime('now'))", 'created_at TEXT');
+  add('avatar', 'avatar TEXT');
+  if (names.has('event_id') && names.has('created_at')) {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_guestbook_event
+        ON guestbook_entries(event_id, created_at)
+    `);
+  }
+}
+try {
+  repairGuestbookColumns();
+} catch (err) {
+  console.error('guestbook schema:', err.message);
+}
 
 module.exports = db;

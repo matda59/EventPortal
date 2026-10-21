@@ -39,15 +39,78 @@ body {
   justify-content: flex-start;
 }
 
+.app { width: 100%; max-width: 720px; margin: 0 auto; position: relative; z-index: 2; }
+
+/* Longhands only. A shorthand like `var(--page-bg-image) center / cover` is
+   dropped by the browser, so the uploaded background never paints. */
 body.has-page-bg {
-  background:
-    linear-gradient(color-mix(in srgb, var(--bg-earth) 76%, transparent), color-mix(in srgb, var(--bg-earth) 88%, transparent)),
-    var(--page-bg-image) center / cover no-repeat fixed,
-    var(--bg-earth);
+  background-color: var(--bg-earth);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--bg-earth) 46%, transparent), color-mix(in srgb, var(--bg-earth) 68%, transparent)),
+    var(--page-bg-image);
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, center;
+  background-size: cover, cover;
+  background-attachment: scroll, scroll;
 }
 body.has-page-bg .site-chrome {
   background: color-mix(in srgb, var(--bg-earth) 82%, transparent);
   backdrop-filter: blur(10px);
+}
+
+.photo-board {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+.polaroid {
+  position: absolute;
+  width: 150px;
+  background: var(--surface-card);
+  padding: 10px 10px 6px;
+  border-radius: 6px;
+  box-shadow: 0 14px 30px rgba(43, 33, 33, 0.22);
+  transform: rotate(var(--rot, 0deg));
+  animation-name: drift;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+.polaroid-photo {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 4px;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(217, 107, 39, 0.25), rgba(216, 107, 129, 0.28));
+}
+.polaroid-photo img,
+.polaroid-photo video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+.polaroid figcaption {
+  margin-top: 7px;
+  text-align: center;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-family: "Segoe Script", "Comic Sans MS", cursive;
+}
+.pos-1 { top: 6%;  left: 4%;     --rot: -7deg; animation-duration: 7s;   animation-delay: 0s;   }
+.pos-2 { top: 9%;  right: 5%;    --rot: 6deg;  animation-duration: 8.5s; animation-delay: 0.6s; }
+.pos-3 { top: 38%; left: 3%;     --rot: 5deg;  animation-duration: 9s;   animation-delay: 1.1s; }
+.pos-4 { top: 42%; right: 3%;    --rot: -6deg; animation-duration: 7.8s; animation-delay: 0.3s; }
+.pos-5 { bottom: 7%; left: 9%;   --rot: 8deg;  animation-duration: 8s;   animation-delay: 1.4s; }
+.pos-6 { bottom: 6%; right: 10%; --rot: -8deg; animation-duration: 9.5s; animation-delay: 0.9s; }
+@keyframes drift {
+  0%, 100% { transform: translate(0, 0) rotate(var(--rot, 0deg)); }
+  50%      { transform: translate(6px, -14px) rotate(calc(var(--rot, 0deg) + 2deg)); }
 }
 
 .site-chrome {
@@ -197,12 +260,38 @@ body.has-page-bg .site-chrome {
 #mp3-volume { width: 100%; accent-color: var(--accent-orange); cursor: pointer; }
 
 /* ── Responsive ────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .photo-board {
+    position: relative;
+    inset: auto;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 14px 18px;
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto 8px;
+    overflow: visible;
+    z-index: 2;
+  }
+  .polaroid {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: 132px;
+    animation: none;
+  }
+}
 @media (max-width: 480px) {
   .card { padding: 26px 20px; }
   .question-text { font-size: 1.18rem; }
   .mp3-player { min-width: 0; right: 12px; bottom: 12px; }
   .mp3-label { display: none; }
   .hof-row { grid-template-columns: 38px 1fr auto; gap: 8px; }
+  .polaroid { width: 108px; padding: 7px 7px 4px; }
+  .polaroid figcaption { font-size: 0.72rem; }
 }
 
 /* ── Event home ────────────────────────────────────────────────────── */
@@ -359,6 +448,15 @@ body.has-page-bg .site-chrome {
 .home-tile-title { font-weight: 800; color: var(--text-dark); font-size: 1.05rem; }
 .home-tile-hint { font-size: 0.88rem; color: var(--text-muted); line-height: 1.35; }
 
+.optional { font-weight: 600; color: var(--text-muted); }
+.gallery-form { margin-bottom: 22px; }
+.file-input {
+  display: block;
+  width: 100%;
+  margin: 0 0 16px;
+  font: inherit;
+  color: var(--text-dark);
+}
 .gallery-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -372,6 +470,7 @@ body.has-page-bg .site-chrome {
   border: 1px solid var(--border-soft);
 }
 .gallery-zoom {
+.gallery-open {
   display: block;
   width: 100%;
   padding: 0;
@@ -385,6 +484,7 @@ body.has-page-bg .site-chrome {
   object-fit: cover;
   display: block;
   background: #1e293b;
+  pointer-events: none;
 }
 .gallery-item figcaption {
   padding: 8px 10px;
@@ -393,6 +493,67 @@ body.has-page-bg .site-chrome {
 }
 
 .guestbook-message { min-height: 96px; resize: vertical; }
+.avatar-field { margin-top: 14px; }
+.avatar-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.avatar-choice {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 2px solid var(--border-soft);
+  background: var(--bg-earth);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.avatar-choice[aria-selected="true"] {
+  border-color: var(--primary-red);
+  box-shadow: 0 0 0 3px rgba(184, 59, 38, 0.18);
+}
+.avatar-upload-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.avatar-upload {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--primary-red);
+  background: var(--surface-card);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.avatar-upload input, #guestbook-avatar-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+.avatar-clear {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.avatar-preview {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 16px;
+  margin-top: 10px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-earth);
+}
 .guestbook-list { margin-top: 22px; display: grid; gap: 10px; max-height: min(52vh, 420px); overflow: auto; }
 .guestbook-entry {
   text-align: left;
@@ -401,8 +562,75 @@ body.has-page-bg .site-chrome {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
 }
+.guestbook-entry-head { display: flex; align-items: center; gap: 10px; }
 .guestbook-entry strong { color: var(--primary-red); }
-.guestbook-entry p { margin-top: 4px; color: var(--text-muted); font-size: 0.95rem; line-height: 1.45; }
+.guestbook-entry p { margin-top: 6px; color: var(--text-muted); font-size: 0.95rem; line-height: 1.45; }
+.gb-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-card);
+  border: 1px solid var(--border-soft);
+  font-size: 1.4rem;
+  line-height: 1;
+  flex: 0 0 auto;
+  object-fit: cover;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(20, 12, 12, 0.92);
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+}
+.lightbox-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+}
+.lightbox-caption { font-size: 0.95rem; line-height: 1.35; }
+.lightbox-tools { display: flex; gap: 6px; flex: 0 0 auto; }
+.lightbox-tools button {
+  min-width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  font-size: 1.15rem;
+  cursor: pointer;
+  padding: 0 10px;
+}
+.lightbox-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  cursor: grab;
+}
+.lightbox-stage.is-dragging { cursor: grabbing; }
+.lightbox-stage img, .lightbox-stage video {
+  width: min(92vw, 1100px);
+  height: min(78vh, 820px);
+  object-fit: contain;
+  transform-origin: center center;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+body.lightbox-open { overflow: hidden; }
 
 @media (max-width: 760px) {
   .home-screen.has-polaroids { width: 100%; min-height: 0; }
