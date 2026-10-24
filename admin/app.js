@@ -150,6 +150,7 @@
     events: [],
     detail: null,
     media: { images: [], music: [] },
+    staged: [],
     picker: null,
     busy: false,
   };
@@ -189,6 +190,9 @@
   }
 
   const MAX_POLAROIDS = 8;
+  const DEFAULT_POLAROIDS = 6;
+  const MAX_BACKGROUNDS = 8;
+  let bgPreviewTimer = null;
 
   function polaroidScale(value) {
     const n = Number(value);
@@ -217,7 +221,10 @@
     if (!state.detail.quiz) state.detail.quiz = { ecard: {} };
     if (!state.detail.quiz.ecard) state.detail.quiz.ecard = {};
     if (!state.detail._polaroidsReady) {
-      state.detail.quiz.ecard.photos = storedPolaroids(state.detail.quiz.ecard.photos);
+      const stored = storedPolaroids(state.detail.quiz.ecard.photos);
+      state.detail.quiz.ecard.photos = stored.length
+        ? stored
+        : Array.from({ length: DEFAULT_POLAROIDS }, () => ({ src: '', caption: '', size: 100 }));
       state.detail._polaroidsReady = true;
     }
     if (!Array.isArray(state.detail.quiz.ecard.photos)) state.detail.quiz.ecard.photos = [];
@@ -257,13 +264,39 @@
     ev.enableGuestbook = val('ev-guestbook');
     ev.themePreset = val('ev-preset') || 'custom';
     ev.theme = readThemeFromForm();
-    state.detail.quiz.heroImage = val('ev-bg') || '';
-    state.detail.quiz.ecard.photos = readPolaroidsFromDom();
+    const photos = document.getElementById('look-stage') ? readPolaroidsFromDom() : null;
+    if (photos) state.detail.quiz.ecard.photos = photos;
+    const backgrounds = readBackgroundsFromDom();
+    if (backgrounds) {
+      state.detail.quiz.ecard.backgrounds = backgrounds;
+      state.detail.quiz.heroImage = backgrounds[0] || '';
+    }
+  }
+
+  function readBackgroundsFromDom() {
+    const strip = document.getElementById('bg-strip');
+    if (!strip) return null;
+    return Array.from(strip.querySelectorAll('[data-bg-src]'))
+      .map((el) => el.getAttribute('data-bg-src'))
+      .filter(Boolean)
+      .slice(0, MAX_BACKGROUNDS);
+  }
+
+  function backgroundList() {
+    if (!state.detail) state.detail = { event: {}, quiz: { ecard: {} }, questions: [] };
+    if (!state.detail.quiz) state.detail.quiz = { ecard: {} };
+    if (!state.detail.quiz.ecard) state.detail.quiz.ecard = {};
+    if (!Array.isArray(state.detail.quiz.ecard.backgrounds)) {
+      state.detail.quiz.ecard.backgrounds = state.detail.quiz.heroImage
+        ? [state.detail.quiz.heroImage]
+        : [];
+    }
+    return state.detail.quiz.ecard.backgrounds.filter(Boolean).slice(0, MAX_BACKGROUNDS);
   }
 
   function eventLookHtml(opts) {
     const photos = (opts && opts.photos) || [];
-    const bg = (opts && opts.bgImage) || '';
+    const backgrounds = (opts && opts.backgrounds) || [];
     const name = (opts && opts.name) || 'Event name';
     const desc = (opts && opts.description) || '';
     const polaroids = photos.map((p, i) => {
@@ -282,24 +315,29 @@
         <input type="hidden" data-photo-src value="${esc(p.src || '')}" />
       </figure>`;
     }).join('');
-    const bgCss = bg ? ` style="background-image:linear-gradient(rgba(251,246,239,0.55), rgba(251,246,239,0.72)), url('${String(bg).replace(/'/g, '%27')}')"` : '';
+    const thumbs = backgrounds.map((url, i) => `
+      <figure class="bg-thumb">
+        ${isMediaVideo(url) ? `<video src="${esc(url)}" muted></video>` : `<img src="${esc(url)}" alt="" />`}
+        <button type="button" data-remove-bg="${i}" data-bg-src="${esc(url)}" aria-label="Remove background">×</button>
+      </figure>`).join('');
     return `
       <div class="intro-preview intro-preview-edit">
-        <div class="intro-preview-stage ${bg ? 'has-bg' : ''}" id="look-stage"${bgCss}>
+        <div class="intro-preview-stage" id="look-stage">
+          <div class="stage-bg" id="stage-bg-a"></div>
+          <div class="stage-bg" id="stage-bg-b"></div>
           ${polaroids}
           <div class="intro-preview-card polaroid-center">
             <div class="intro-preview-headline" id="look-name">${esc(name)}</div>
             <div class="intro-preview-note" id="look-desc">${esc(desc || 'Guests see your description here.')}</div>
-            <input type="hidden" id="ev-bg" value="${esc(bg)}" />
+            <div class="bg-strip" id="bg-strip">${thumbs || '<span class="hint">No background yet</span>'}</div>
             <div class="look-bg-actions">
-              <button type="button" class="btn btn-ghost btn-sm" id="pick-bg">Set background</button>
-              <button type="button" class="btn btn-ghost btn-sm" id="clear-bg" ${bg ? '' : 'hidden'}>Remove</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="add-bg" ${backgrounds.length >= MAX_BACKGROUNDS ? 'disabled' : ''}>Add background</button>
             </div>
           </div>
         </div>
         <div class="polaroid-toolbar">
           <button type="button" class="btn btn-ghost btn-sm" id="add-polaroid" ${photos.length >= MAX_POLAROIDS ? 'disabled' : ''}>Add polaroid</button>
-          <span class="hint">${photos.length ? photos.length + ' of ' + MAX_POLAROIDS : 'Add a polaroid, then choose its photo and size.'}</span>
+          <span class="hint">${photos.length} of ${MAX_POLAROIDS}. Click a frame to add a photo. Backgrounds fade through on a loop.</span>
         </div>
       </div>`;
   }
@@ -595,10 +633,10 @@
         </div>
         <div class="span-2">
           <h2 class="section-title">Photos &amp; background</h2>
-          <p class="hint">Add only the Polaroids you want, using this event’s media. Drag Size, then save — that size is what guests see. Click a photo to enlarge it. The × removes that Polaroid. Use the centre button for the page background.</p>
+          <p class="hint">The Polaroid frames start on the page so you can see where photos go. Click one to add a photo, drag Size, then click the photo to view it larger. Add more than one background and they fade from one to the next. You can set all of this before you save.</p>
           ${eventLookHtml({
             photos: ensurePolaroidList(),
-            bgImage: (state.detail && state.detail.quiz && state.detail.quiz.heroImage) || '',
+            backgrounds: backgroundList(),
             name: ev.name || 'Event name',
             description: ev.description || '',
           })}
@@ -1219,27 +1257,53 @@
     });
   }
 
-  function setBgImage(url) {
-    const hidden = document.getElementById('ev-bg');
-    if (hidden) hidden.value = url || '';
-    const stage = document.getElementById('look-stage');
-    if (stage) {
-      if (url) {
-        stage.style.backgroundImage = 'linear-gradient(rgba(251,246,239,0.55), rgba(251,246,239,0.72)), url("' + String(url).replace(/"/g, '\\"') + '")';
-        stage.classList.add('has-bg');
-      } else {
-        stage.style.backgroundImage = '';
-        stage.classList.remove('has-bg');
-      }
+  function stopBgPreview() {
+    if (bgPreviewTimer) {
+      clearInterval(bgPreviewTimer);
+      bgPreviewTimer = null;
     }
-    const clear = document.getElementById('clear-bg');
-    if (clear) clear.hidden = !url;
+  }
+
+  function paintStageBackgrounds(urls) {
+    stopBgPreview();
+    const layers = [document.getElementById('stage-bg-a'), document.getElementById('stage-bg-b')];
+    if (!layers[0] || !layers[1]) return;
+    const list = (urls || []).filter(Boolean);
+    const setImg = (el, url) => {
+      el.style.backgroundImage = url ? 'url("' + String(url).replace(/"/g, '\\"') + '")' : '';
+    };
+    layers.forEach((el) => el.classList.remove('is-on'));
+    if (!list.length) return;
+    setImg(layers[0], list[0]);
+    layers[0].classList.add('is-on');
+    if (list.length < 2) return;
+    let shown = 0;
+    bgPreviewTimer = setInterval(() => {
+      if (!document.getElementById('stage-bg-a')) {
+        stopBgPreview();
+        return;
+      }
+      const next = (shown + 1) % list.length;
+      const incoming = layers[0].classList.contains('is-on') ? layers[1] : layers[0];
+      const outgoing = incoming === layers[0] ? layers[1] : layers[0];
+      setImg(incoming, list[next]);
+      incoming.classList.add('is-on');
+      outgoing.classList.remove('is-on');
+      shown = next;
+    }, 5000);
   }
 
   function refreshPolaroids(next, pickIndex) {
+    refreshLook(next, readBackgroundsFromDom() || backgroundList(), pickIndex);
+  }
+
+  function refreshLook(photos, backgrounds, pickIndex) {
     syncEventDraft();
     ensurePolaroidList();
-    state.detail.quiz.ecard.photos = next;
+    state.detail.quiz.ecard.photos = photos;
+    state.detail.quiz.ecard.backgrounds = backgrounds;
+    state.detail.quiz.heroImage = (backgrounds && backgrounds[0]) || '';
+    state.detail._polaroidsReady = true;
     renderEditor();
     if (pickIndex != null) openPicker('image', (url) => setPolaroidSrc(pickIndex, url));
   }
@@ -1284,10 +1348,25 @@
       list.push({ src: '', caption: '', size: 100 });
       refreshPolaroids(list, list.length - 1);
     });
-    document.getElementById('pick-bg')?.addEventListener('click', () => {
-      openPicker('image', (url) => setBgImage(url));
+    document.getElementById('add-bg')?.addEventListener('click', () => {
+      if (backgroundList().length >= MAX_BACKGROUNDS) return;
+      openPicker('image', (url) => {
+        const list = readBackgroundsFromDom() || backgroundList();
+        if (!url || list.includes(url) || list.length >= MAX_BACKGROUNDS) return;
+        list.push(url);
+        refreshLook(readPolaroidsFromDom(), list);
+      });
     });
-    document.getElementById('clear-bg')?.addEventListener('click', () => setBgImage(''));
+    $app.querySelectorAll('[data-remove-bg]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const list = readBackgroundsFromDom() || [];
+        list.splice(Number(btn.getAttribute('data-remove-bg')), 1);
+        refreshLook(readPolaroidsFromDom(), list);
+      });
+    });
+    paintStageBackgrounds(readBackgroundsFromDom() || backgroundList());
     const name = document.getElementById('ev-name');
     const desc = document.getElementById('ev-description');
     const outName = document.getElementById('look-name');
@@ -1368,9 +1447,85 @@
     if (wrap) wrap.hidden = v !== 'Other';
   }
 
+  function isStagedUrl(url) {
+    return String(url || '').startsWith('blob:');
+  }
+
+  function fileExt(name) {
+    const match = String(name || '').toLowerCase().match(/\.[a-z0-9]+$/);
+    return match ? match[0] : '';
+  }
+
+  function stageFile(kind, file) {
+    const ext = fileExt(file && file.name);
+    const imageExts = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm']);
+    if (kind === 'music' && ext !== '.mp3') throw new Error('Only .mp3 files can be added.');
+    if (kind !== 'music' && !imageExts.has(ext)) {
+      throw new Error('Photos and videos must be jpg, png, gif, webp, mp4, or webm.');
+    }
+    if (file.size > 25 * 1024 * 1024) throw new Error('File is too large (max 25 MB).');
+    const url = URL.createObjectURL(file);
+    const item = { name: file.name, url, size: file.size, staged: true, file, kind };
+    state.staged.push(item);
+    if (kind === 'music') state.media.music = [item].concat(state.media.music || []);
+    else state.media.images = [item].concat(state.media.images || []);
+    return item;
+  }
+
+  function removeStaged(url) {
+    const item = state.staged.find((entry) => entry.url === url);
+    if (item) URL.revokeObjectURL(item.url);
+    state.staged = state.staged.filter((entry) => entry.url !== url);
+    state.media.images = (state.media.images || []).filter((entry) => entry.url !== url);
+    state.media.music = (state.media.music || []).filter((entry) => entry.url !== url);
+  }
+
+  async function attachStagedMedia(payload) {
+    if (!state.staged.length) return payload;
+    let eventId = state.eventId;
+    if (!eventId || eventId === 'new') {
+      const created = await api('/events', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...payload,
+          photos: (payload.photos || []).map((p) => ({ ...p, src: isStagedUrl(p.src) ? '' : p.src })),
+          bgImages: (payload.bgImages || []).filter((url) => !isStagedUrl(url)),
+          bgImage: (payload.bgImages || []).find((url) => url && !isStagedUrl(url)) || null,
+        }),
+      });
+      eventId = created.event.id;
+      state.eventId = eventId;
+      state.detail = created;
+    }
+    const map = new Map();
+    const uploaded = [];
+    for (const item of state.staged) {
+      const body = new FormData();
+      body.append('file', item.file, item.file.name);
+      const data = await api('/events/' + eventId + '/media?kind=' + encodeURIComponent(item.kind), { method: 'POST', body });
+      uploaded.push([item, item.kind === 'music' ? data.name : data.url]);
+    }
+    for (const [item, url] of uploaded) {
+      map.set(item.url, url);
+      URL.revokeObjectURL(item.url);
+    }
+    state.staged = [];
+    state.media.images = (state.media.images || []).filter((entry) => !entry.staged);
+    state.media.music = (state.media.music || []).filter((entry) => !entry.staged);
+    const rewrite = (url) => map.get(url) || url;
+    payload.photos = (payload.photos || []).map((p) => ({ ...p, src: rewrite(p.src) }));
+    payload.bgImages = (payload.bgImages || []).map(rewrite).filter((url) => url && !isStagedUrl(url));
+    payload.bgImage = payload.bgImages[0] || null;
+    document.querySelectorAll('.q-image, .q-audio').forEach((el) => {
+      if (map.has(el.value)) el.value = map.get(el.value);
+    });
+    return payload;
+  }
+
   async function saveEvent(isNew) {
+    const startedNew = isNew || !state.eventId || state.eventId === 'new';
     const occasionSel = val('ev-occasion');
-    const payload = {
+    let payload = {
       name: val('ev-name'),
       slug: val('ev-slug'),
       occasionType: occasionSel === 'Other' ? (val('ev-occasion-custom').trim() || 'Other') : occasionSel,
@@ -1385,13 +1540,23 @@
       enableGuestbook: val('ev-guestbook'),
       themePreset: val('ev-preset') || 'custom',
       theme: readThemeFromForm(),
-      bgImage: val('ev-bg') || null,
-      photos: readPolaroidsFromDom(),
+      bgImages: readBackgroundsFromDom() || backgroundList(),
+      photos: document.getElementById('look-stage') ? readPolaroidsFromDom() : ensurePolaroidList(),
     };
+    payload.bgImage = payload.bgImages[0] || null;
     ensurePolaroidList();
     state.detail.quiz.ecard.photos = payload.photos;
+    state.detail.quiz.ecard.backgrounds = payload.bgImages;
     try {
-      if (isNew) {
+      payload = await attachStagedMedia(payload);
+      if (state.detail && state.detail.quiz) {
+        if (!state.detail.quiz.ecard) state.detail.quiz.ecard = {};
+        state.detail.quiz.ecard.photos = payload.photos;
+        state.detail.quiz.ecard.backgrounds = payload.bgImages;
+        state.detail.quiz.heroImage = payload.bgImage || '';
+        state.detail._polaroidsReady = true;
+      }
+      if (!state.eventId || state.eventId === 'new') {
         const created = await api('/events', { method: 'POST', body: JSON.stringify(payload) });
         toast('Event created. Add questions on the Quiz tab when you are ready.');
         state.detail = created;
@@ -1399,15 +1564,24 @@
         go('/admin/events/' + created.event.id);
       } else {
         const updated = await api('/events/' + state.eventId, { method: 'PUT', body: JSON.stringify(payload) });
-        state.detail.event = Object.assign(state.detail.event, updated.event);
+        state.detail.event = Object.assign(state.detail.event || {}, updated.event);
         if (updated.quiz) {
           state.detail.quiz = updated.quiz;
           state.detail._polaroidsReady = false;
         }
-        toast('Event saved');
-        renderEditor();
+        if (startedNew) {
+          toast('Event created. Add questions on the Quiz tab when you are ready.');
+          state.tab = 'event';
+          go('/admin/events/' + state.eventId);
+        } else {
+          toast('Event saved');
+          renderEditor();
+        }
       }
-    } catch (err) { toast(err.message, 'err'); }
+    } catch (err) {
+      toast(err.message, 'err');
+      if (startedNew && state.eventId && state.eventId !== 'new') renderEditor();
+    }
   }
 
   async function saveQuizCopy() {
@@ -1418,7 +1592,7 @@
       subtitle: val('quiz-subtitle'),
       honoree: val('quiz-honoree'),
       welcomeMessage: val('quiz-welcome'),
-      heroImage: existing.heroImage || null,
+      heroImage: (ecard.backgrounds && ecard.backgrounds[0]) || existing.heroImage || null,
       audio: {
         backgroundMusic: val('audio-bg'),
         correctSound: val('audio-ok'),
@@ -1431,6 +1605,7 @@
         message: ecard.message || '',
         buttonText: ecard.buttonText || '',
         photos: Array.isArray(ecard.photos) ? ecard.photos : [],
+        backgrounds: Array.isArray(ecard.backgrounds) ? ecard.backgrounds : [],
       },
       scoreTiers: readTiers(),
     };
@@ -1588,10 +1763,10 @@
           : `<div style="padding:28px 10px;text-align:center;background:#0f172a;color:#fff;font-weight:700">MP3</div>`}
         <div class="body">
           <div class="name">${esc(f.name)}</div>
-          <p class="meta">${esc(f.guest ? ('Guest upload' + (f.guestName ? ' · ' + f.guestName : '')) : (f.legacy ? 'Already used on this event' : f.url))}</p>
+          <p class="meta">${esc(f.staged ? 'Uploads when you save the event' : (f.guest ? ('Guest upload' + (f.guestName ? ' · ' + f.guestName : '')) : (f.legacy ? 'Already used on this event' : f.url)))}</p>
           <div class="card-actions">
             <button class="btn btn-ghost btn-sm" data-copy="${esc(kind === 'music' ? f.name : f.url)}">Copy path</button>
-            ${f.legacy ? '' : `<button class="btn btn-ghost btn-sm" data-del-media="${esc(kind)}" data-name="${esc(f.name)}">Delete</button>`}
+            ${f.legacy ? '' : `<button class="btn btn-ghost btn-sm" data-del-media="${esc(kind)}" data-name="${esc(f.name)}" ${f.staged ? `data-staged="1" data-url="${esc(f.url)}"` : ''}>Delete</button>`}
           </div>
         </div>
       </article>`).join('');
@@ -1634,6 +1809,12 @@
     });
     $app.querySelectorAll('[data-del-media]').forEach((btn) => {
       btn.addEventListener('click', async () => {
+        if (btn.hasAttribute('data-staged')) {
+          removeStaged(btn.getAttribute('data-url'));
+          toast('Removed');
+          renderEditor();
+          return;
+        }
         if (!confirm('Delete this file from this event?')) return;
         const kind = btn.getAttribute('data-del-media');
         const name = btn.getAttribute('data-name');
@@ -1649,7 +1830,10 @@
 
   async function uploadFile(kind, file, refreshAfter) {
     if (!state.eventId || state.eventId === 'new') {
-      throw new Error('Save the event first, then upload files on the Media tab.');
+      const item = stageFile(kind, file);
+      toast(file.name + ' will upload when you save the event.');
+      if (refreshAfter && state.tab === 'media') renderEditor();
+      return { kind, name: item.name, url: item.url, staged: true };
     }
     const body = new FormData();
     body.append('file', file);
@@ -1668,10 +1852,6 @@
   }
 
   function openPicker(kind, onPick) {
-    if (!state.eventId || state.eventId === 'new') {
-      toast('Save the event first, then upload files on the Media tab.', 'err');
-      return;
-    }
     const items = kind === 'music' ? state.media.music : state.media.images;
     $modal.innerHTML = `
       <div class="modal-backdrop">
@@ -1680,7 +1860,7 @@
             <h2>Choose ${kind === 'music' ? 'an MP3' : 'a photo'}</h2>
             <button class="btn btn-ghost btn-sm" type="button" id="close-modal">Close</button>
           </div>
-          <p class="hint">Pick from this event’s media, or upload from this computer.</p>
+          <p class="hint">Pick from this event’s media, or upload from this computer. New files stay with this draft until you save.</p>
           ${dropzone(kind)}
           <div class="grid" style="gap:8px">
             ${(items || []).map((f) => `
@@ -1739,6 +1919,7 @@
   }
 
   function render() {
+    stopBgPreview();
     $modal.innerHTML = '';
     if (!state.authed) return renderLogin();
     if (state.view === 'editor') return renderEditor();
@@ -1746,12 +1927,21 @@
   }
 
   async function loadMedia() {
+    const stagedImages = (state.media.images || []).filter((file) => file.staged);
+    const stagedMusic = (state.media.music || []).filter((file) => file.staged);
     if (!state.eventId || state.eventId === 'new') {
-      state.media = { images: [], music: [] };
+      state.media = { images: stagedImages, music: stagedMusic };
       return;
     }
-    try { state.media = await api('/events/' + state.eventId + '/media'); }
-    catch { state.media = { images: [], music: [] }; }
+    try {
+      const remote = await api('/events/' + state.eventId + '/media');
+      state.media = {
+        images: stagedImages.concat(remote.images || []),
+        music: stagedMusic.concat(remote.music || []),
+      };
+    } catch {
+      state.media = { images: stagedImages, music: stagedMusic };
+    }
   }
 
   async function loadView() {

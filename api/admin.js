@@ -224,16 +224,36 @@ function cleanPhotos(list) {
   return list.slice(0, 8).map(cleanPhoto).filter((p) => p.src || p.caption);
 }
 
+function cleanBackgrounds(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const item of list) {
+    const src = str(typeof item === 'string' ? item : (item && item.src), 240, '');
+    if (!src || src.startsWith('blob:') || seen.has(src)) continue;
+    seen.add(src);
+    out.push(src);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 function applyQuizLook(eventId, body) {
-  if (!body || (body.photos === undefined && body.bgImage === undefined && body.heroImage === undefined)) {
+  if (!body || (body.photos === undefined && body.bgImage === undefined && body.heroImage === undefined && body.bgImages === undefined)) {
     return quizByEvent(eventId);
   }
   const quiz = ensureQuiz(eventId);
   const ecard = parseJson(quiz.ecard_json, {});
   const photos = cleanPhotos(body.photos);
   if (photos) ecard.photos = photos;
-  const bg = body.bgImage !== undefined ? body.bgImage : body.heroImage;
-  const hero = bg === undefined ? quiz.hero_image : str(bg, 240, null);
+  let backgrounds;
+  if (Array.isArray(body.bgImages)) backgrounds = cleanBackgrounds(body.bgImages);
+  else if (body.bgImage !== undefined || body.heroImage !== undefined) {
+    const bg = body.bgImage !== undefined ? body.bgImage : body.heroImage;
+    backgrounds = cleanBackgrounds(bg ? [bg] : []);
+  }
+  if (backgrounds) ecard.backgrounds = backgrounds;
+  const hero = backgrounds ? (backgrounds[0] || null) : quiz.hero_image;
   db.prepare('UPDATE quizzes SET hero_image = ?, ecard_json = ? WHERE id = ?')
     .run(hero, JSON.stringify(ecard), quiz.id);
   return quizByEvent(eventId);
@@ -470,6 +490,11 @@ router.post('/events/:id/duplicate', (req, res) => {
           src: files.retargetImageUrl(p && p.src, event.id, newId),
         }));
       }
+      if (Array.isArray(ecardCopy.backgrounds)) {
+        ecardCopy.backgrounds = ecardCopy.backgrounds
+          .map((src) => files.retargetImageUrl(src, event.id, newId))
+          .filter(Boolean);
+      }
       db.prepare(`
         INSERT INTO quizzes
           (id, event_id, title, subtitle, honoree, welcome_message, hero_image,
@@ -593,6 +618,9 @@ router.put('/events/:id/quiz', (req, res) => {
   }));
 
   const photos = Array.isArray(ecard.photos) ? ecard.photos.slice(0, 8).map(cleanPhoto).filter((p) => p.src || p.caption) : [];
+  const backgrounds = Array.isArray(ecard.backgrounds)
+    ? cleanBackgrounds(ecard.backgrounds)
+    : cleanBackgrounds(quiz.hero_image ? [quiz.hero_image] : []);
 
   const cleanEcard = {
     greeting:    str(ecard.greeting, 120, ''),
@@ -600,6 +628,7 @@ router.put('/events/:id/quiz', (req, res) => {
     message:     str(ecard.message, 800, ''),
     buttonText:  str(ecard.buttonText, 80, ''),
     photos,
+    backgrounds,
   };
 
   const cleanAudio = {
@@ -619,7 +648,7 @@ router.put('/events/:id/quiz', (req, res) => {
     str(body.subtitle, 200, null),
     str(body.honoree, 80, null),
     str(body.welcomeMessage, 800, null),
-    str(body.heroImage, 240, null),
+    backgrounds[0] || null,
     JSON.stringify(cleanAudio),
     JSON.stringify(cleanTiers),
     JSON.stringify(cleanEcard),

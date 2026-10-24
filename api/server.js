@@ -62,6 +62,18 @@ function normalizeTheme(raw) {
   return out;
 }
 
+function eventBackgrounds(quiz) {
+  const ecard = parseJson(quiz?.ecard_json, {});
+  const list = [];
+  const add = (value) => {
+    const url = String(value || '').trim();
+    if (url && !list.includes(url)) list.push(url);
+  };
+  if (Array.isArray(ecard.backgrounds)) ecard.backgrounds.forEach(add);
+  add(quiz?.hero_image);
+  return list;
+}
+
 function findEventBySlug(slug) {
   return db.prepare('SELECT * FROM events WHERE slug = ?').get(slug);
 }
@@ -266,6 +278,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
           welcomeMessage: 'This event has ended. Thanks for celebrating with us.',
           heroImage:      quiz?.hero_image     ?? null,
           bgImage:        quiz?.hero_image     ?? null,
+          bgImages:       eventBackgrounds(quiz),
           occasionType:   event.occasion_type  || null,
           headerEmoji:    event.header_emoji   || null,
           theme:          normalizeTheme(parseJson(event.theme_json || quiz?.theme_json, {})),
@@ -298,6 +311,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
         welcomeMessage: quiz?.welcome_message ?? null,
         heroImage:      quiz?.hero_image     ?? null,
         bgImage:        quiz?.hero_image     ?? null,
+        bgImages:       eventBackgrounds(quiz),
         occasionType:   event.occasion_type  || null,
         headerEmoji:    event.header_emoji   || null,
         theme:          normalizeTheme(parseJson(event.theme_json || quiz?.theme_json, {})),

@@ -237,6 +237,53 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .intro-preview-stage.has-bg {
   background-color: #fbf6ef;
 }
+.stage-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+}
+.stage-bg.is-on { opacity: 1; }
+.stage-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(251, 246, 239, 0.5), rgba(251, 246, 239, 0.7));
+}
+.bg-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin: 8px 0 4px;
+}
+.bg-thumb { position: relative; width: 42px; margin: 0; }
+.bg-thumb img, .bg-thumb video {
+  width: 42px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+  background: #1e293b;
+}
+.bg-thumb button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: #0f172a;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
 .intro-polaroid {
   position: absolute;
   width: 72px;
