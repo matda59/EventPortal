@@ -40,6 +40,7 @@ body {
 }
 
 .app { width: 100%; max-width: 720px; margin: 0 auto; position: relative; z-index: 2; }
+.app:has(.home-screen.has-polaroids.active) { max-width: 1100px; }
 
 /* Background photos sit on their own layers. A shorthand like
    `var(--page-bg-image) center / cover` is dropped by the browser. */
@@ -89,6 +90,7 @@ body.has-page-bg .site-chrome {
   padding: 10px 4px 14px;
   background: var(--bg-earth);
 }
+body:has(.home-screen.has-polaroids.active) .site-chrome { max-width: 1100px; }
 .site-home {
   font-family: inherit;
   font-size: 0.95rem;
@@ -221,15 +223,6 @@ body.has-page-bg .site-chrome {
 .mp3-controls button:hover { transform: scale(1.12); }
 #mp3-volume { width: 100%; accent-color: var(--accent-orange); cursor: pointer; }
 
-/* ── Responsive ────────────────────────────────────────────────────── */
-@media (max-width: 480px) {
-  .card { padding: 26px 20px; }
-  .question-text { font-size: 1.18rem; }
-  .mp3-player { min-width: 0; right: 12px; bottom: 12px; }
-  .mp3-label { display: none; }
-  .hof-row { grid-template-columns: 38px 1fr auto; gap: 8px; }
-}
-
 /* ── Event home ────────────────────────────────────────────────────── */
 .home-screen { position: relative; text-align: center; padding: 4px 2px 8px; }
 .home-screen.has-polaroids { width: min(1100px, calc(100vw - 88px)); min-height: 640px; }
@@ -240,6 +233,7 @@ body.has-page-bg .site-chrome {
   pointer-events: auto;
   position: absolute;
   width: calc(var(--polaroid-scale, 100) * 1.15px);
+  max-width: 30vw;
   padding: 8px 8px 12px;
   border: 0;
   border-radius: 4px;
@@ -277,57 +271,6 @@ body.has-page-bg .site-chrome {
 .home-pos-7 { top: 18%; left: 16%; --rot: -3deg; }
 .home-pos-8 { top: 18%; right: 16%; --rot: 4deg; }
 
-.lightbox {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-}
-.lightbox-backdrop {
-  position: absolute;
-  inset: 0;
-  border: 0;
-  background: rgba(20, 12, 10, 0.84);
-  cursor: pointer;
-}
-.lightbox-dialog {
-  position: relative;
-  z-index: 1;
-  width: min(960px, 100%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-.lightbox-dialog img,
-.lightbox-dialog video {
-  display: block;
-  max-width: min(960px, 92vw);
-  max-height: 78vh;
-  object-fit: contain;
-  border-radius: 10px;
-  background: #111;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
-}
-.lightbox-close {
-  align-self: flex-end;
-  border: 0;
-  border-radius: 999px;
-  padding: 8px 14px;
-  font: inherit;
-  font-weight: 700;
-  color: #1f2937;
-  background: #fff;
-  cursor: pointer;
-}
-.lightbox-dialog p {
-  color: #fff;
-  font-weight: 650;
-  text-align: center;
-  max-width: 40em;
-}
 .home-kicker {
   font-weight: 700;
   color: var(--accent-orange);
@@ -406,7 +349,6 @@ body.has-page-bg .site-chrome {
   overflow: hidden;
   border: 1px solid var(--border-soft);
 }
-.gallery-zoom {
 .gallery-open {
   display: block;
   width: 100%;
@@ -569,23 +511,83 @@ body.has-page-bg .site-chrome {
 }
 body.lightbox-open { overflow: hidden; }
 
-@media (max-width: 760px) {
-  .home-screen.has-polaroids { width: 100%; min-height: 0; }
+/* Phones and narrow tablets: stack Polaroids above the copy instead of
+   absolute side placement (that layout overlaps and clips on ~412px screens). */
+@media (max-width: 900px) {
+  .app:has(.home-screen.has-polaroids.active),
+  body:has(.home-screen.has-polaroids.active) .site-chrome {
+    max-width: 720px;
+  }
+  .home-screen.has-polaroids {
+    width: 100%;
+    min-height: 0;
+    padding: 0;
+  }
   .home-screen.has-polaroids .home-copy { width: 100%; }
   .home-polaroids {
     position: static;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 12px;
-    margin-bottom: 18px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+    gap: 10px 12px;
+    margin: 0 0 18px;
     pointer-events: auto;
   }
   .home-polaroid {
     position: static;
-    width: min(calc(var(--polaroid-scale, 100) * 1.05px), 70vw);
+    width: 100%;
+    max-width: none;
+    margin: 0 auto;
+    transform: rotate(calc(var(--rot, 0deg) * 0.35));
+  }
+  .home-polaroid:hover { transform: rotate(calc(var(--rot, 0deg) * 0.35)) scale(1.03); }
+  .home-polaroid span { font-size: 0.72rem; }
+  .home-title { font-size: clamp(1.7rem, 8vw, 2.4rem); }
+  .home-desc { font-size: 1rem; margin-bottom: 20px; }
+  .lightbox-bar {
+    flex-wrap: wrap;
+    padding: 10px 10px calc(10px + env(safe-area-inset-top, 0px));
+  }
+  .lightbox-caption {
+    flex: 1 1 100%;
+    order: 2;
+    font-size: 0.88rem;
+  }
+  .lightbox-tools {
+    flex: 1 1 auto;
+    justify-content: space-between;
+    width: 100%;
+  }
+  .lightbox-tools button {
+    min-width: 40px;
+    height: 40px;
+    flex: 1 1 0;
+  }
+  .lightbox-stage img, .lightbox-stage video {
+    width: min(96vw, 1100px);
+    height: min(70vh, 820px);
   }
 }
+
 @media (max-width: 480px) {
+  body { padding: 14px 12px calc(96px + env(safe-area-inset-bottom, 0px)); }
+  .card { padding: 22px 16px; }
+  .question-text { font-size: 1.18rem; }
   .home-nav, .gallery-grid { grid-template-columns: 1fr; }
+  .home-polaroids {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .home-tile { padding: 16px 14px; }
+  .site-chrome {
+    margin: -4px auto 12px;
+    padding: 8px 2px 10px;
+    gap: 8px;
+  }
+  .hof-row { grid-template-columns: 38px 1fr auto; gap: 8px; }
+  .mp3-player {
+    min-width: 0;
+    right: max(10px, env(safe-area-inset-right, 0px));
+    bottom: max(10px, env(safe-area-inset-bottom, 0px));
+  }
+  .mp3-label { display: none; }
 }

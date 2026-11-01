@@ -779,10 +779,6 @@
   // ── Welcome / name entry ───────────────────────────────────────────
   function wireEvents() {
     $('home-polaroids')?.addEventListener('click', onEnlargeClick);
-    $('gallery-grid')?.addEventListener('click', onEnlargeClick);
-    $('lightbox-close')?.addEventListener('click', closeLightbox);
-    $('lightbox-backdrop')?.addEventListener('click', closeLightbox);
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
     $('nav-home')?.addEventListener('click', goHome);
     $('results-home')?.addEventListener('click', goHome);
     $('guestbook-form')?.addEventListener('submit', onGuestbookSubmit);
