@@ -779,8 +779,22 @@
   // ── Welcome / name entry ───────────────────────────────────────────
   function wireEvents() {
     $('home-polaroids')?.addEventListener('click', onEnlargeClick);
-    $('nav-home')?.addEventListener('click', goHome);
-    $('results-home')?.addEventListener('click', goHome);
+    $('nav-home')?.addEventListener('click', () => {
+      if ($('screen-results')?.classList.contains('active')) closeResults();
+      else goHome();
+    });
+    $('results-home')?.addEventListener('click', closeResults);
+    $('results-close')?.addEventListener('click', closeResults);
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (!$('lightbox')?.hidden) return;
+      if ($('screen-results')?.classList.contains('active')) closeResults();
+    });
+    window.addEventListener('popstate', () => {
+      const fromResults = pushedResults;
+      pushedResults = false;
+      if (fromResults && $('screen-results')?.classList.contains('active')) goHome();
+    });
     $('guestbook-form')?.addEventListener('submit', onGuestbookSubmit);
     $('gallery-form')?.addEventListener('submit', onGallerySubmit);
     $('gallery-grid')?.addEventListener('click', onGalleryOpen);
@@ -1023,6 +1037,27 @@
     }
   }
 
+  function clearFunFacts() {
+    $('question-anim')?.querySelectorAll('.fun-fact').forEach((el) => el.remove());
+  }
+
+  function showFunFact(text) {
+    clearFunFacts();
+    if (!text) return;
+    const fact = document.createElement('div');
+    fact.className = 'fun-fact';
+    const body = document.createElement('p');
+    body.textContent = `💡 ${text}`;
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'fun-fact-close';
+    close.setAttribute('aria-label', 'Close');
+    close.textContent = '✕';
+    close.addEventListener('click', () => fact.remove());
+    fact.append(body, close);
+    $('question-anim').appendChild(fact);
+  }
+
   function renderQuestion() {
     const q     = state.questions[state.current];
     const total = state.questions.length;
@@ -1030,6 +1065,8 @@
     state.answered      = false;
     state.grading       = false;
     showQuizError('');
+    clearFunFacts();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 
     $('progress-label').textContent = `Question ${state.current + 1} of ${total}`;
     $('progress-by').textContent    = q.submittedBy ? `Asked by ${q.submittedBy}` : '';
@@ -1097,14 +1134,9 @@
       if (result.correct) playCue(q, 'correct');
       else                playCue(q, 'wrong');
 
-      if (q.funFact) {
-        const fact       = document.createElement('p');
-        fact.className   = 'fun-fact';
-        fact.textContent = `💡 ${q.funFact}`;
-        $('question-anim').appendChild(fact);
-      }
-
+      showFunFact(q.funFact);
       $('next-btn').disabled = false;
+      $('next-btn').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     } catch (err) {
       optionEls.forEach((el) => {
         el.disabled = false;
@@ -1153,7 +1185,9 @@
     $('score-raw').textContent        = `${state.score} / ${total}`;
     document.querySelector('.score-ring').style.setProperty('--ring-pct', `${percent}%`);
 
+    if (!$('lightbox')?.hidden) closeLightbox();
     showScreen('results');
+    rememberResults();
     if (guestFlags().enableLeaderboard) {
       $('hall-of-fame').hidden = false;
       await submitScore(total);
@@ -1201,13 +1235,36 @@
     }).join('');
   }
 
+  let pushedResults = false;
+
+  function rememberResults() {
+    if (pushedResults) return;
+    try {
+      history.pushState({ eventPortal: 'results' }, '');
+      pushedResults = true;
+    } catch { /* history can be unavailable */ }
+  }
+
+  function dropResultsHistory() {
+    if (!pushedResults) return;
+    pushedResults = false;
+    history.back();
+  }
+
+  function closeResults() {
+    goHome();
+    dropResultsHistory();
+  }
+
   function resetAndRestart() {
     $('player-name').value = '';
     state.playerName = '';
     state.sessionId  = null;
     state.current    = 0;
     state.score      = 0;
+    clearFunFacts();
     showScreen('welcome');
+    dropResultsHistory();
   }
 
   // ── MP3 Player ─────────────────────────────────────────────────────

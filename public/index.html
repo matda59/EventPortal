@@ -141,6 +141,9 @@
     </section>
 
     <section id="screen-results" class="screen card">
+      <div class="results-toolbar">
+        <button id="results-close" class="results-close" type="button">Close</button>
+      </div>
       <h1 id="tier-title" class="title"></h1>
       <div class="score-ring">
         <span id="score-percent" class="score-percent">0%</span>
@@ -153,8 +156,10 @@
           <div class="hof-loading">Loading…</div>
         </div>
       </div>
-      <button id="play-again-btn" class="btn btn-secondary btn-block" type="button">Play Again ↺</button>
-      <button id="results-home" class="btn btn-primary btn-block" type="button">Back to event home</button>
+      <div class="results-actions">
+        <button id="play-again-btn" class="btn btn-secondary btn-block" type="button">Play Again ↺</button>
+        <button id="results-home" class="btn btn-primary btn-block" type="button">Back to event home</button>
+      </div>
     </section>
 
   </main>

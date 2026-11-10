@@ -187,10 +187,34 @@ body:has(.home-screen.has-polaroids.active) .site-chrome { max-width: 1100px; }
 .option.wrong { border-color: var(--primary-red); background: rgba(184, 59, 38, 0.12); }
 .option.wrong .marker { background: var(--primary-red); border-color: var(--primary-red); color: #fff; }
 .option:disabled { cursor: default; }
-.fun-fact { margin-top: 16px; padding: 12px 16px; border-left: 4px solid var(--highlight-pink); background: rgba(216, 107, 129, 0.08); border-radius: var(--radius-sm); font-size: 0.95rem; color: var(--text-muted); animation: cardIn 0.3s var(--ease); }
+.fun-fact { position: relative; margin-top: 16px; padding: 12px 42px 12px 16px; border-left: 4px solid var(--highlight-pink); background: rgba(216, 107, 129, 0.08); border-radius: var(--radius-sm); font-size: 0.95rem; color: var(--text-muted); animation: cardIn 0.3s var(--ease); }
+.fun-fact p { margin: 0; }
+.fun-fact-close { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border: 0; border-radius: 999px; background: transparent; color: var(--text-muted); font: inherit; font-weight: 800; cursor: pointer; }
 
 /* ── Results ───────────────────────────────────────────────────────── */
-#screen-results { text-align: center; }
+#screen-results { position: relative; text-align: center; }
+.results-toolbar { display: flex; justify-content: flex-end; margin: -6px 0 8px; }
+.results-close {
+  border: 0;
+  border-radius: 999px;
+  background: var(--bg-earth);
+  color: var(--text-dark);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 8px 14px;
+}
+.results-close:hover { background: var(--border-soft); }
+.results-actions {
+  position: sticky;
+  bottom: 8px;
+  z-index: 3;
+  background: var(--surface-card);
+  box-shadow: 0 -14px 16px var(--surface-card);
+  padding-top: 8px;
+}
+.results-actions .btn-block { margin-top: 10px; }
 .score-ring { width: 170px; height: 170px; margin: 8px auto 22px; border-radius: 50%; display: grid; place-content: center; background: radial-gradient(var(--surface-card) 58%, transparent 59%), conic-gradient(var(--accent-orange) var(--ring-pct, 0%), var(--border-soft) 0); transition: --ring-pct 0.8s var(--ease); }
 .score-percent { font-size: 2.6rem; font-weight: 800; color: var(--primary-red); line-height: 1; }
 .score-raw { font-size: 1rem; color: var(--text-muted); font-weight: 600; }
