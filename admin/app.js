@@ -764,7 +764,7 @@
       const picked = new Set((Array.isArray(selected) ? selected : []).map(String));
       const files = state.media.music || [];
       if (!files.length && !picked.size) {
-        return '<p class="hint">Upload MP3s on the Media tab, then tick them here.</p>';
+        return '<p class="hint">Upload MP3s on the Media tab. They play for guests automatically. Tick tracks here only to shorten the playlist.</p>';
       }
       const extra = [...picked].filter((n) => n && !files.some((f) => f.name === n));
       const items = files.map((f) => f.name).concat(extra);
@@ -797,7 +797,7 @@
       </div>
 
       <h2 class="section-title" style="margin-top:28px">Audio cues</h2>
-      <p class="hint">Sound effects for this quiz. Upload tracks on the Media tab. Guests only hear the playlist you tick below.</p>
+      <p class="hint">Sound effects for this quiz. Upload tracks on the Media tab. Correct and wrong sounds stay out of the guest player unless you tick them below.</p>
       <div class="form-grid">
         <div class="field">
           <label for="audio-bg">Background</label>
@@ -814,7 +814,7 @@
       </div>
 
       <h2 class="section-title" style="margin-top:28px">Guest playlist</h2>
-      <p class="hint">Tick the tracks that should appear in this event’s public player. Shown to guests when Music player is on. Background music is included automatically.</p>
+      <p class="hint">Guests get the music player as soon as you upload MP3s and Music player is on. Leave every box unticked to play all of those uploads. Tick tracks only when you want a shorter playlist. Background music is included with a shorter list.</p>
       ${playlistPicker(audio.playlist)}
 
       <h2 class="section-title" style="margin-top:28px">Score tiers</h2>
@@ -1725,7 +1725,7 @@
     const music = (state.media && state.media.music) || [];
     return `
       <h2 class="section-title">This event’s media</h2>
-      <p class="hint">Guests add photos and videos from the Gallery on the event page. Those show up here so you can remove them. Host uploads are for Polaroids, the page background, question pictures, and the guest playlist.</p>
+      <p class="hint">Guests add photos and videos from the Gallery on the event page. Those show up here so you can remove them. Host uploads are for Polaroids, the page background, and question pictures. MP3s you add here play in the guest music player when that feature is on.</p>
       <div class="grid grid-2">
         <section>
           <h2 class="section-title">Photos &amp; videos</h2>

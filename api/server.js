@@ -179,7 +179,7 @@ function safeMp3Name(value) {
   return base;
 }
 
-function eventPlaylistNames(quiz) {
+function curatedPlaylistNames(quiz) {
   const audio = parseJson(quiz?.audio_json, {});
   const names = [];
   const seen = new Set();
@@ -192,8 +192,14 @@ function eventPlaylistNames(quiz) {
     names.push(name);
   };
   if (Array.isArray(audio.playlist)) audio.playlist.forEach(add);
+  if (!names.length) return [];
   add(audio.backgroundMusic);
   return names;
+}
+
+function soundEffectNames(quiz) {
+  const audio = parseJson(quiz?.audio_json, {});
+  return [audio.correctSound, audio.wrongSound].map(safeMp3Name).filter(Boolean);
 }
 
 function presentAudio(eventId, audio) {
@@ -502,7 +508,20 @@ app.get('/api/events/:slug/music', async (req, res) => {
     if (!event) return res.status(404).json({ error: 'Event not found.' });
     if (event.enable_music === 0) return res.json([]);
     const quiz = quizForEvent(event.id);
-    res.json(listExistingMp3s(event.id, eventPlaylistNames(quiz)));
+    const curated = listExistingMp3s(event.id, curatedPlaylistNames(quiz));
+    if (curated.length) return res.json(curated);
+
+    const uploaded = await files.listMedia(
+      files.eventMediaDir('music', event.id),
+      `/music/${event.id}`,
+      /\.mp3$/i,
+    );
+    const effects = new Set(soundEffectNames(quiz).map((name) => name.toLowerCase()));
+    const songs = uploaded.filter((file) => !effects.has(file.name.toLowerCase()));
+    const tracks = (songs.length ? songs : uploaded)
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    res.json(tracks.map((file) => file.url));
   } catch (err) {
     console.error('GET music:', err);
     res.json([]);
