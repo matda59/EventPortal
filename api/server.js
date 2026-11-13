@@ -268,6 +268,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
         code: 'not_activated',
         eventName: event.name,
         headerEmoji: event.header_emoji || '',
+        enableMusic: event.enable_music == null ? true : !!event.enable_music,
       });
     }
 
@@ -504,8 +505,8 @@ app.post('/api/events/:slug/scores', limitScores, (req, res) => {
 
 app.get('/api/events/:slug/music', async (req, res) => {
   try {
-    const event = findActiveEvent(req.params.slug);
-    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    const event = findEventBySlug(req.params.slug);
+    if (!event || event.status === 'ended') return res.status(404).json({ error: 'Event not found.' });
     if (event.enable_music === 0) return res.json([]);
     const quiz = quizForEvent(event.id);
     const curated = listExistingMp3s(event.id, curatedPlaylistNames(quiz));

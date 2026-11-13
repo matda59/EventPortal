@@ -50,6 +50,7 @@
     guestbook:  $('screen-guestbook'),
     gallery:    $('screen-gallery'),
     hof:        $('screen-hof'),
+    music:      $('screen-music'),
     welcome:    $('screen-welcome'),
     quiz:       $('screen-quiz'),
     results:    $('screen-results')
@@ -94,7 +95,10 @@
     if ($('home-name')) $('home-name').textContent = title;
     if ($('home-kicker')) $('home-kicker').textContent = subtitle || '';
     if ($('home-description')) $('home-description').textContent = message || '';
-    if ($('home-nav')) $('home-nav').innerHTML = '';
+    if ($('home-nav')) {
+      $('home-nav').innerHTML = '';
+      addMusicTile($('home-nav'));
+    }
     renderSidePolaroids();
     const meta = (state.config && state.config.meta) || {};
     applyPageBackground(meta.bgImages && meta.bgImages.length ? meta.bgImages : heroImage);
@@ -267,12 +271,29 @@
         let data = null;
         try { data = await res.json(); } catch { data = null; }
         if (data && data.code === 'not_activated') {
+          state.config = {
+            meta: {
+              eventName: data.eventName || 'Event is not activated',
+              headerEmoji: data.headerEmoji || '',
+              description: 'This event is not activated yet. It will be available here once the host sets the status to active.',
+            },
+            flags: {
+              enableQuiz: false,
+              enableLeaderboard: false,
+              enableGallery: false,
+              enableMusic: data.enableMusic !== false,
+              enableGuestbook: false,
+              status: 'draft',
+            },
+          };
           showUnavailable({
-            title:   data.eventName || 'Event is not activated',
-            message: 'This event is not activated yet. It will be available here once the host sets the status to active.',
-            emoji:   data.headerEmoji || '',
+            title:   state.config.meta.eventName,
+            message: state.config.meta.description,
+            emoji:   state.config.meta.headerEmoji,
           });
-          setupMp3Player();
+          await setupMp3Player();
+          addMusicTile($('home-nav'));
+          wireEvents();
           return;
         }
         throw new Error((data && data.error) || 'Event is not available.');
@@ -326,7 +347,7 @@
 
     state.questions = Array.isArray(state.config.questions) ? state.config.questions : [];
     applyGuestFlags();
-    setupMp3Player();
+    await setupMp3Player();
     wireEvents();
     if (guestFlags().enableGallery) {
       try { await loadGalleryItems(); } catch { state.galleryItems = null; }
@@ -404,6 +425,15 @@
         hint: 'See the quiz leaderboard',
       });
     }
+    if (f.enableMusic && f.status !== 'ended') {
+      const count = mp3.tracks.length;
+      tiles.push({
+        id: 'music',
+        emoji: '🎵',
+        title: 'Music',
+        hint: count ? `${count} song${count === 1 ? '' : 's'}` : 'Play the playlist',
+      });
+    }
 
     if (!tiles.length) {
       nav.innerHTML = '<p class="hof-empty">This event has no guest features turned on yet.</p>';
@@ -423,6 +453,7 @@
         else if (t.id === 'guestbook') openGuestbook();
         else if (t.id === 'gallery') openGallery();
         else if (t.id === 'hof') openHof();
+        else if (t.id === 'music') openMusic();
       });
       nav.appendChild(btn);
     });
@@ -470,8 +501,41 @@
   }
 
   function goHome() {
+    const f = guestFlags();
+    if (f.status === 'draft') {
+      const meta = (state.config && state.config.meta) || {};
+      showUnavailable({
+        title: meta.eventName || 'Event is not activated',
+        message: meta.description || 'This event is not activated yet. It will be available here once the host sets the status to active.',
+        emoji: meta.headerEmoji || '',
+      });
+      addMusicTile($('home-nav'));
+      return;
+    }
     renderHome();
     showScreen('home');
+  }
+
+  function openMusic() {
+    renderMusicList();
+    showScreen('music');
+  }
+
+  function addMusicTile(nav) {
+    const f = guestFlags();
+    if (!nav || !state.config || !f.enableMusic || f.status === 'ended') return;
+    if (nav.querySelector('[data-feature="music"]')) return;
+    const count = mp3.tracks.length;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'home-tile';
+    btn.setAttribute('data-feature', 'music');
+    btn.innerHTML =
+      '<span class="home-tile-emoji">🎵</span>' +
+      '<span class="home-tile-title">Music</span>' +
+      `<span class="home-tile-hint">${count ? `${count} song${count === 1 ? '' : 's'}` : 'Play the playlist'}</span>`;
+    btn.addEventListener('click', openMusic);
+    nav.appendChild(btn);
   }
 
   function openQuiz() {
@@ -1268,7 +1332,13 @@
   }
 
   // ── MP3 Player ─────────────────────────────────────────────────────
-  const mp3 = { tracks: [], index: 0, playing: false, volume: 0.3, audio: null, open: true };
+  const mp3 = { tracks: [], index: 0, playing: false, volume: 0.3, audio: null, open: true, bound: false, error: '' };
+
+  function musicWanted() {
+    const f = state.config && state.config.flags;
+    if (!f || f.status === 'ended') return false;
+    return f.enableMusic !== false;
+  }
 
   function mp3TrackUrl(name) {
     const value = String(name || '');
@@ -1282,62 +1352,166 @@
     return base.replace(/\.mp3$/i, '').replace(/[_-]+/g, ' ') || 'Track';
   }
 
+  function bindMp3Controls() {
+    if (mp3.bound) return;
+    mp3.bound = true;
+    const audio = $('mp3-audio');
+    mp3.audio = audio;
+    if (audio) {
+      audio.onended = () => startMp3(mp3.index + 1);
+      audio.onerror = () => {
+        mp3.playing = false;
+        mp3.error = 'This song could not be played.';
+        updateMp3Label();
+      };
+    }
+    $('mp3-toggle')?.addEventListener('click', () => {
+      mp3.open = !mp3.open;
+      $('mp3-panel').style.display = mp3.open ? 'block' : 'none';
+      $('mp3-chevron').textContent = mp3.open ? '▲' : '▼';
+    });
+    $('mp3-play')?.addEventListener('click', (e) => { e.stopPropagation(); toggleMp3(); });
+    $('mp3-next')?.addEventListener('click', (e) => { e.stopPropagation(); startMp3(mp3.index + 1); });
+    $('mp3-prev')?.addEventListener('click', (e) => { e.stopPropagation(); startMp3(mp3.index - 1); });
+    $('music-play')?.addEventListener('click', toggleMp3);
+    $('music-next')?.addEventListener('click', () => startMp3(mp3.index + 1));
+    $('music-prev')?.addEventListener('click', () => startMp3(mp3.index - 1));
+    $('music-list')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-track]');
+      if (!btn) return;
+      startMp3(Number(btn.getAttribute('data-track')));
+    });
+    const onVolume = (e) => setMp3Volume(parseFloat(e.target.value));
+    $('mp3-volume')?.addEventListener('input', onVolume);
+    $('music-volume')?.addEventListener('input', onVolume);
+  }
+
+  function setMp3Volume(value) {
+    if (!Number.isFinite(value)) return;
+    mp3.volume = value;
+    if (mp3.audio) mp3.audio.volume = value;
+    ['mp3-volume', 'music-volume'].forEach((id) => {
+      const el = $(id);
+      if (el) el.value = String(value);
+    });
+  }
+
   async function setupMp3Player() {
-    if (!guestFlags().enableMusic) {
+    bindMp3Controls();
+    const player = $('mp3-player');
+    if (!musicWanted()) {
       mp3.tracks = [];
-      $('mp3-player').hidden = true;
+      if (player) player.hidden = true;
       return;
     }
     try {
-      const res  = await fetch(MUSIC_URL);
+      const res = await fetch(MUSIC_URL);
       const files = res.ok ? await res.json() : [];
-      mp3.tracks  = files.map((f) => ({
+      mp3.tracks = (Array.isArray(files) ? files : []).map((f) => ({
         name: mp3Label(f),
-        url:  mp3TrackUrl(f),
+        url: mp3TrackUrl(f),
       }));
     } catch { mp3.tracks = []; }
 
-    $('mp3-player').hidden = !mp3.tracks.length;
+    if (player) player.hidden = false;
+    mp3.error = '';
     updateMp3Label();
-    $('mp3-toggle').addEventListener('click', () => {
-      mp3.open = !mp3.open;
-      $('mp3-panel').style.display  = mp3.open ? 'block' : 'none';
-      $('mp3-chevron').textContent  = mp3.open ? '▲' : '▼';
-    });
-    $('mp3-play').addEventListener('click', toggleMp3);
-    $('mp3-next').addEventListener('click', () => startMp3(mp3.index + 1));
-    $('mp3-prev').addEventListener('click', () => startMp3(mp3.index - 1));
-    $('mp3-volume').addEventListener('input', (e) => {
-      mp3.volume = parseFloat(e.target.value);
-      if (mp3.audio) mp3.audio.volume = mp3.volume;
-    });
+    const existing = document.querySelector('[data-feature="music"] .home-tile-hint');
+    if (existing) {
+      const count = mp3.tracks.length;
+      existing.textContent = count ? `${count} song${count === 1 ? '' : 's'}` : 'Play the playlist';
+    }
   }
 
   function startMp3(idx) {
-    if (!mp3.tracks.length) return;
-    const n    = mp3.tracks.length;
-    mp3.index  = ((idx % n) + n) % n;
-    if (mp3.audio) { mp3.audio.pause(); mp3.audio.onended = null; }
-    mp3.audio          = new Audio(mp3.tracks[mp3.index].url);
-    mp3.audio.volume   = mp3.volume;
-    mp3.audio.onended  = () => startMp3(mp3.index + 1);
-    mp3.playing        = true;
-    mp3.audio.play().catch(() => {});
+    if (!mp3.tracks.length) {
+      mp3.error = 'No songs yet. Add MP3s in the event’s Media tab.';
+      updateMp3Label();
+      return;
+    }
+    const audio = mp3.audio || $('mp3-audio');
+    if (!audio) return;
+    mp3.audio = audio;
+    const n = mp3.tracks.length;
+    mp3.index = ((idx % n) + n) % n;
+    mp3.error = '';
+    audio.pause();
+    audio.volume = mp3.volume;
+    const nextUrl = mp3.tracks[mp3.index].url;
+    if (audio.getAttribute('src') !== nextUrl) audio.src = nextUrl;
+    mp3.playing = true;
     updateMp3Label();
+    const pending = audio.play();
+    if (pending && pending.catch) {
+      pending.catch(() => {
+        mp3.playing = false;
+        mp3.error = 'This song could not be played.';
+        updateMp3Label();
+      });
+    }
   }
 
   function toggleMp3() {
-    if (!mp3.tracks.length) return;
-    if (mp3.playing) { mp3.playing = false; if (mp3.audio) mp3.audio.pause(); }
-    else if (mp3.audio && mp3.audio.paused) { mp3.playing = true; mp3.audio.play().catch(() => {}); }
-    else { startMp3(mp3.index); }
-    updateMp3Label();
+    if (!mp3.tracks.length) {
+      mp3.error = 'No songs yet. Add MP3s in the event’s Media tab.';
+      updateMp3Label();
+      return;
+    }
+    const audio = mp3.audio || $('mp3-audio');
+    if (mp3.playing) {
+      mp3.playing = false;
+      if (audio) audio.pause();
+      updateMp3Label();
+      return;
+    }
+    if (audio && audio.src && audio.paused && audio.getAttribute('src')) {
+      mp3.playing = true;
+      mp3.error = '';
+      updateMp3Label();
+      audio.play().catch(() => {
+        mp3.playing = false;
+        mp3.error = 'This song could not be played.';
+        updateMp3Label();
+      });
+      return;
+    }
+    startMp3(mp3.index);
+  }
+
+  function renderMusicList() {
+    const list = $('music-list');
+    const lead = $('music-lead');
+    if (lead) {
+      lead.textContent = mp3.tracks.length ? 'Tap a song to play it.' : 'No songs have been added yet.';
+    }
+    if (!list) return;
+    if (!mp3.tracks.length) {
+      list.innerHTML = '<li class="music-empty">No songs yet. Add MP3s in the event’s Media tab.</li>';
+      return;
+    }
+    list.innerHTML = mp3.tracks.map((track, i) => `
+      <li>
+        <button type="button" class="music-track${i === mp3.index && mp3.playing ? ' is-playing' : ''}" data-track="${i}">
+          ${escHtml(track.name)}
+        </button>
+      </li>`).join('');
   }
 
   function updateMp3Label() {
-    $('mp3-track').textContent = mp3.tracks.length ? mp3.tracks[mp3.index].name : 'No tracks available';
-    $('mp3-emoji').classList.toggle('spin', mp3.playing);
-    $('mp3-play').textContent = mp3.playing ? '⏸' : '▶';
+    const name = mp3.tracks.length ? mp3.tracks[mp3.index].name : 'No songs yet';
+    const status = mp3.error || name;
+    if ($('mp3-track')) $('mp3-track').textContent = status;
+    if ($('music-now')) $('music-now').textContent = status;
+    if ($('mp3-emoji')) $('mp3-emoji').classList.toggle('spin', mp3.playing);
+    const mark = mp3.playing ? '⏸' : '▶';
+    if ($('mp3-play')) $('mp3-play').textContent = mark;
+    if ($('music-play')) $('music-play').textContent = mark;
+    const err = $('music-error');
+    if (err) {
+      err.hidden = !mp3.error;
+      err.textContent = mp3.error || '';
+    }
+    renderMusicList();
   }
 
   window.playAudioTrack = function (src) {

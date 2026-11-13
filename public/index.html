@@ -29,6 +29,7 @@
         <button type="button" id="mp3-next" title="Next">⏭</button>
       </div>
       <input type="range" id="mp3-volume" min="0" max="1" step="0.05" value="0.3" title="Volume" />
+      <audio id="mp3-audio" preload="none"></audio>
     </div>
   </div>
 
@@ -100,6 +101,20 @@
         <button type="submit" class="btn btn-primary btn-block" id="gallery-submit">Add to gallery</button>
       </form>
       <div id="gallery-grid" class="gallery-grid"></div>
+    </section>
+
+    <section id="screen-music" class="screen card">
+      <h1 class="title">Music</h1>
+      <p class="lead" id="music-lead">Tap a song to play it.</p>
+      <p id="music-now" class="music-now">No song selected</p>
+      <div class="mp3-controls music-controls">
+        <button type="button" id="music-prev" title="Previous">⏮</button>
+        <button type="button" id="music-play" title="Play / Pause">▶</button>
+        <button type="button" id="music-next" title="Next">⏭</button>
+      </div>
+      <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.3" title="Volume" />
+      <p id="music-error" class="error-text" role="alert" hidden></p>
+      <ul id="music-list" class="music-list"></ul>
     </section>
 
     <section id="screen-hof" class="screen card">

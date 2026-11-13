@@ -700,7 +700,7 @@
               <input type="checkbox" id="ev-music" ${ev.enableMusic !== false ? 'checked' : ''} />
               <span>
                 <strong>Music player</strong>
-                <small>Guest playlist of uploaded MP3s</small>
+                <small>Music tile on the event page. Plays MP3s from the Media tab.</small>
               </span>
             </label>
             <label class="feature-card">
