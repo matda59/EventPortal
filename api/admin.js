@@ -14,6 +14,7 @@ const db        = require('./db');
 const files     = require('./files');
 const guestbook = require('./guestbook');
 const gallery   = require('./gallery');
+const rsvp      = require('./rsvp');
 
 const COOKIE      = 'ep_admin';
 const COOKIE_MAX  = 60 * 60 * 24 * 14;
@@ -107,6 +108,9 @@ function serializeEvent(row, extras = {}) {
     enableGallery:     row.enable_gallery == null ? true : !!row.enable_gallery,
     enableMusic:       row.enable_music == null ? true : !!row.enable_music,
     enableGuestbook:   !!row.enable_guestbook,
+    enableRsvp:        row.enable_rsvp == null ? true : !!row.enable_rsvp,
+    venue:             row.venue || '',
+    startTime:         row.start_time || '',
     createdAt:         row.created_at,
     updatedAt:         row.updated_at,
     ...extras,
@@ -327,8 +331,9 @@ router.post('/events', (req, res) => {
     db.prepare(`
       INSERT INTO events
         (id, slug, name, description, occasion_type, event_date, status, theme_preset, theme_json,
-         header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music, enable_guestbook)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music, enable_guestbook,
+         enable_rsvp, venue, start_time)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       slugRes.slug,
@@ -345,6 +350,9 @@ router.post('/events', (req, res) => {
       body.enableGallery === false ? 0 : 1,
       body.enableMusic === false ? 0 : 1,
       body.enableGuestbook === false ? 0 : 1,
+      body.enableRsvp === false ? 0 : 1,
+      str(body.venue, 120, ''),
+      str(body.startTime, 8, null),
     );
     ensureQuiz(id, name);
     applyQuizLook(id, body);
@@ -400,6 +408,7 @@ router.put('/events/:id', (req, res) => {
       slug = ?, name = ?, description = ?, occasion_type = ?, event_date = ?, status = ?,
       theme_preset = ?, theme_json = ?, header_emoji = ?,
       enable_quiz = ?, enable_leaderboard = ?, enable_gallery = ?, enable_music = ?, enable_guestbook = ?,
+      enable_rsvp = ?, venue = ?, start_time = ?,
       updated_at = datetime('now')
     WHERE id = ?
   `).run(
@@ -417,6 +426,9 @@ router.put('/events/:id', (req, res) => {
       body.enableGallery === undefined ? (event.enable_gallery == null ? 1 : event.enable_gallery) : (body.enableGallery ? 1 : 0),
       body.enableMusic === undefined ? (event.enable_music == null ? 1 : event.enable_music) : (body.enableMusic ? 1 : 0),
       body.enableGuestbook === undefined ? (event.enable_guestbook ? 1 : 0) : (body.enableGuestbook ? 1 : 0),
+      body.enableRsvp === undefined ? (event.enable_rsvp == null ? 1 : event.enable_rsvp) : (body.enableRsvp ? 1 : 0),
+      body.venue === undefined ? (event.venue || '') : str(body.venue, 120, ''),
+      body.startTime === undefined ? event.start_time : str(body.startTime, 8, null),
       event.id,
   );
 
@@ -468,8 +480,9 @@ router.post('/events/:id/duplicate', (req, res) => {
     db.prepare(`
       INSERT INTO events
         (id, slug, name, description, occasion_type, event_date, status, theme_preset, theme_json,
-         header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music, enable_guestbook)
-      VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?)
+         header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music, enable_guestbook,
+         enable_rsvp, venue, start_time)
+      VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       newId, slug, name, event.description || '',
       event.occasion_type, event.event_date,
@@ -479,6 +492,9 @@ router.post('/events/:id/duplicate', (req, res) => {
       event.enable_gallery == null ? 1 : (event.enable_gallery ? 1 : 0),
       event.enable_music == null ? 1 : (event.enable_music ? 1 : 0),
       event.enable_guestbook ? 1 : 0,
+      event.enable_rsvp == null ? 1 : (event.enable_rsvp ? 1 : 0),
+      event.venue || '',
+      event.start_time || null,
     );
 
     const qid = uid();
@@ -574,6 +590,25 @@ router.get('/events/:id/guestbook', (req, res) => {
     console.error('GET admin guestbook:', err);
     res.status(500).json({ error: 'Unable to read guest book.' });
   }
+});
+
+router.get('/events/:id/rsvp', (req, res) => {
+  const event = eventById(req.params.id);
+  if (!event) return res.status(404).json({ error: 'Event not found.' });
+  const rows = rsvp.list(event.id);
+  res.json({
+    summary: rsvp.summary(rows),
+    count: rows.length,
+    entries: rows.map((row) => rsvp.serialize(row, { includeNote: true })),
+  });
+});
+
+router.delete('/events/:id/rsvp/:entryId', (req, res) => {
+  const event = eventById(req.params.id);
+  if (!event) return res.status(404).json({ error: 'Event not found.' });
+  const info = rsvp.remove(req.params.entryId, event.id);
+  if (!info.changes) return res.status(404).json({ error: 'RSVP not found.' });
+  res.json({ ok: true });
 });
 
 router.delete('/events/:id/guestbook/:entryId', (req, res) => {

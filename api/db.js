@@ -30,6 +30,9 @@ db.exec(`
     enable_gallery     INTEGER NOT NULL DEFAULT 1,
     enable_music       INTEGER NOT NULL DEFAULT 1,
     enable_guestbook   INTEGER NOT NULL DEFAULT 0,
+    enable_rsvp        INTEGER NOT NULL DEFAULT 1,
+    venue              TEXT,
+    start_time         TEXT,
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -118,6 +121,21 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_gallery_event
     ON gallery_uploads(event_id, created_at);
 
+  CREATE TABLE IF NOT EXISTS rsvps (
+    id         TEXT PRIMARY KEY,
+    event_id   TEXT NOT NULL,
+    guest_name TEXT NOT NULL,
+    status     TEXT NOT NULL,
+    party_size INTEGER NOT NULL DEFAULT 1,
+    note       TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_rsvp_event
+    ON rsvps(event_id, status);
+
   CREATE TABLE IF NOT EXISTS quiz_answers (
     session_id     TEXT NOT NULL,
     question_id    TEXT NOT NULL,
@@ -145,6 +163,9 @@ addColumnIfMissing('events', 'enable_gallery', 'enable_gallery INTEGER NOT NULL 
 addColumnIfMissing('events', 'enable_music', 'enable_music INTEGER NOT NULL DEFAULT 1');
 addColumnIfMissing('events', 'enable_guestbook', 'enable_guestbook INTEGER NOT NULL DEFAULT 0');
 addColumnIfMissing('events', 'description', 'description TEXT');
+addColumnIfMissing('events', 'enable_rsvp', 'enable_rsvp INTEGER NOT NULL DEFAULT 1');
+addColumnIfMissing('events', 'venue', 'venue TEXT');
+addColumnIfMissing('events', 'start_time', 'start_time TEXT');
 addColumnIfMissing('quiz_questions', 'submitted_by', 'submitted_by TEXT');
 
 // The guestbook index used to live in the schema script above. If an older

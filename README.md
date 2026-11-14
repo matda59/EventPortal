@@ -50,3 +50,5 @@ In `/admin` → Event:
 - **ended** — guests see “this event has ended”
 - **Enable quiz** off — e-card and welcome only
 - **Enable leaderboard** off — personal score still shows; Hall of Fame is hidden and nothing is posted
+- **RSVP** — guests say if they can come, and how many. Place and start time on the Event tab show on the public home page, with a countdown until the event.
+- Notes on an RSVP stay in `/admin` and are not shown to other guests. Sending the same name again updates that reply.

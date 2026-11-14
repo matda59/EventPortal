@@ -11,6 +11,7 @@ const admin = require('./admin');
 const files = require('./files');
 const guestbook = require('./guestbook');
 const gallery = require('./gallery');
+const rsvp = require('./rsvp');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -202,7 +203,12 @@ const limitScores   = rateLimit({ windowMs: 10 * 60 * 1000, max: 60 });
 const limitGuestbook = rateLimit({ windowMs: 10 * 60 * 1000, max: 30 });
 const limitGallery = rateLimit({ windowMs: 10 * 60 * 1000, max: 20 });
 const limitQuestions = rateLimit({ windowMs: 10 * 60 * 1000, max: 20 });
+const limitRsvp = rateLimit({ windowMs: 10 * 60 * 1000, max: 30 });
 const MAX_QUESTIONS = 80;
+
+function rsvpEnabled(event) {
+  return event.enable_rsvp == null ? true : !!event.enable_rsvp;
+}
 
 function readPlayerName(value) {
   if (typeof value !== 'string') return null;
@@ -343,6 +349,8 @@ app.get('/api/events/:slug/public-config', (req, res) => {
           bgImages:       eventBackgrounds(quiz),
           occasionType:   event.occasion_type  || null,
           headerEmoji:    event.header_emoji   || null,
+          venue:          event.venue || null,
+          startTime:      event.start_time || null,
           theme:          normalizeTheme(parseJson(event.theme_json || quiz?.theme_json, {})),
         },
         ecard:      {},
@@ -355,6 +363,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
           enableGallery:     false,
           enableMusic:       false,
           enableGuestbook:   false,
+          enableRsvp:        false,
           status:            'ended',
         },
       });
@@ -376,6 +385,8 @@ app.get('/api/events/:slug/public-config', (req, res) => {
         bgImages:       eventBackgrounds(quiz),
         occasionType:   event.occasion_type  || null,
         headerEmoji:    event.header_emoji   || null,
+        venue:          event.venue || null,
+        startTime:      event.start_time || null,
         theme:          normalizeTheme(parseJson(event.theme_json || quiz?.theme_json, {})),
       },
       ecard:      parseJson(quiz?.ecard_json, {}),
@@ -388,6 +399,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
         enableGallery:     event.enable_gallery == null ? true : !!event.enable_gallery,
         enableMusic:       event.enable_music == null ? true : !!event.enable_music,
         enableGuestbook:   !!event.enable_guestbook,
+        enableRsvp:        rsvpEnabled(event),
         status:            'active',
       },
     });
@@ -845,6 +857,46 @@ app.post('/api/events/:slug/guestbook', limitGuestbook, async (req, res) => {
     if (status >= 500) console.error('POST guestbook:', err);
     const message = status >= 500 ? 'Unable to save guest book entry.' : (err.message || 'Could not save your message.');
     res.status(status).json({ error: message });
+  }
+});
+
+app.get('/api/events/:slug/rsvp', (req, res) => {
+  try {
+    const event = findActiveEvent(req.params.slug);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    if (!rsvpEnabled(event)) return res.status(403).json({ error: 'RSVP is not enabled.' });
+    res.json(rsvp.publicPayload(event.id));
+  } catch (err) {
+    console.error('GET rsvp:', err);
+    res.status(500).json({ error: 'Unable to read RSVPs.' });
+  }
+});
+
+app.post('/api/events/:slug/rsvp', limitRsvp, (req, res) => {
+  try {
+    const event = findActiveEvent(req.params.slug);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    if (!rsvpEnabled(event)) return res.status(403).json({ error: 'RSVP is not enabled.' });
+
+    const name = readPlayerName(req.body?.name);
+    if (!name) return res.status(400).json({ error: 'Please enter your name.' });
+    const status = String(req.body?.status || '').trim();
+    if (!rsvp.STATUSES.has(status)) {
+      return res.status(400).json({ error: 'Choose whether you can come.' });
+    }
+    let partySize = Number(req.body?.partySize);
+    if (status === 'no') partySize = 0;
+    else if (!Number.isInteger(partySize) || partySize < 1 || partySize > 10) {
+      return res.status(400).json({ error: 'Say how many people are coming, from 1 to 10.' });
+    }
+    const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 200) : '';
+    const saved = rsvp.save(uid(), event.id, name, status, partySize, note);
+    const payload = rsvp.publicPayload(event.id);
+    payload.updated = saved.updated;
+    res.status(saved.updated ? 200 : 201).json(payload);
+  } catch (err) {
+    console.error('POST rsvp:', err);
+    res.status(500).json({ error: 'Unable to save RSVP.' });
   }
 });
 

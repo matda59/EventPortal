@@ -53,8 +53,37 @@
           <span id="home-name">Loading…</span>
         </h1>
         <p class="home-desc" id="home-description"></p>
+        <p class="home-when" id="home-when" hidden></p>
+        <p class="home-countdown" id="home-countdown" hidden></p>
         <nav id="home-nav" class="home-nav" aria-label="Event menu"></nav>
       </div>
+    </section>
+
+    <section id="screen-rsvp" class="screen card">
+      <h1 class="title">RSVP</h1>
+      <p class="lead" id="rsvp-lead">Tell the hosts if you can make it.</p>
+      <form id="rsvp-form" class="name-form" novalidate>
+        <label for="rsvp-name" class="field-label">Your name</label>
+        <input id="rsvp-name" class="text-input" type="text" maxlength="30"
+               placeholder="Enter your name…" autocomplete="name" />
+        <span class="field-label" id="rsvp-status-label" style="margin-top:14px">Can you come?</span>
+        <div class="rsvp-choices" role="group" aria-labelledby="rsvp-status-label">
+          <button type="button" class="rsvp-choice" data-rsvp-status="yes" aria-pressed="true">I'm coming</button>
+          <button type="button" class="rsvp-choice" data-rsvp-status="maybe" aria-pressed="false">Maybe</button>
+          <button type="button" class="rsvp-choice" data-rsvp-status="no" aria-pressed="false">Can't make it</button>
+        </div>
+        <div id="rsvp-count-wrap">
+          <label for="rsvp-count" class="field-label" style="margin-top:14px">How many, including you?</label>
+          <input id="rsvp-count" class="text-input" type="number" min="1" max="10" value="1" inputmode="numeric" />
+        </div>
+        <label for="rsvp-note" class="field-label" style="margin-top:14px">Note for the hosts <span class="optional">(optional)</span></label>
+        <textarea id="rsvp-note" class="text-input guestbook-message" maxlength="200" rows="2"
+                  placeholder="Dietary needs, a lift, a plus-one name…"></textarea>
+        <p id="rsvp-error" class="error-text" role="alert" hidden></p>
+        <p id="rsvp-ok" class="quiz-added" hidden>Saved. The hosts have your reply.</p>
+        <button type="submit" class="btn btn-primary btn-block" id="rsvp-submit">Send RSVP</button>
+      </form>
+      <div id="rsvp-list" class="question-bank"></div>
     </section>
 
     <section id="screen-guestbook" class="screen card">

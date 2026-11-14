@@ -338,8 +338,33 @@ button.music-track.is-playing { border-color: var(--primary-red); color: var(--p
   font-size: 1.08rem;
   line-height: 1.65;
   color: var(--text-muted);
-  margin: 0 auto 28px;
+  margin: 0 auto 12px;
   max-width: 38em;
+}
+.home-when, .home-countdown {
+  margin: 0 auto 8px;
+  max-width: 38em;
+  font-size: 1rem;
+}
+.home-when { color: var(--text-dark); font-weight: 700; }
+.home-countdown { color: var(--primary-red); font-weight: 800; }
+.home-nav { margin-top: 18px; }
+.rsvp-choices { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+.rsvp-choice {
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.92rem;
+  padding: 12px 8px;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--border-soft);
+  background: var(--bg-earth);
+  color: var(--text-dark);
+  cursor: pointer;
+}
+.rsvp-choice[aria-pressed="true"] {
+  border-color: var(--primary-red);
+  background: var(--surface-card);
+  box-shadow: 0 0 0 3px rgba(184, 59, 38, 0.15);
 }
 .home-nav {
   display: grid;

@@ -105,6 +105,7 @@
     enableGallery: true,
     enableMusic: true,
     enableGuestbook: true,
+    enableRsvp: true,
     occasionType: 'Birthday',
     themePreset: 'pink',
     theme: DEFAULT_THEME,
@@ -255,6 +256,8 @@
     const occasionSel = val('ev-occasion');
     ev.occasionType = occasionSel === 'Other' ? (val('ev-occasion-custom').trim() || 'Other') : occasionSel;
     ev.eventDate = val('ev-date') || '';
+    ev.startTime = val('ev-time') || '';
+    ev.venue = val('ev-venue') || '';
     ev.status = val('ev-status') || ev.status || 'draft';
     ev.headerEmoji = val('ev-emoji');
     ev.enableQuiz = val('ev-quiz');
@@ -262,6 +265,7 @@
     ev.enableGallery = val('ev-gallery');
     ev.enableMusic = val('ev-music');
     ev.enableGuestbook = val('ev-guestbook');
+    ev.enableRsvp = val('ev-rsvp');
     ev.themePreset = val('ev-preset') || 'custom';
     ev.theme = readThemeFromForm();
     const photos = document.getElementById('look-stage') ? readPolaroidsFromDom() : null;
@@ -484,6 +488,7 @@
           · ${ev.enableMusic !== false ? 'Music on' : 'Music off'}
           · ${ev.enableLeaderboard ? 'Hall of Fame on' : 'Hall of Fame off'}
           · ${ev.enableGuestbook ? 'Guest book on' : 'Guest book off'}
+          · ${ev.enableRsvp !== false ? 'RSVP on' : 'RSVP off'}
           · ${ev.questionCount || 0} question${ev.questionCount === 1 ? '' : 's'}
           · ${ev.scoreCount || 0} score${ev.scoreCount === 1 ? '' : 's'}
         </p>
@@ -662,6 +667,14 @@
           <input id="ev-date" type="date" value="${esc(ev.eventDate || '')}" />
         </div>
         <div class="field">
+          <label for="ev-time">Start time</label>
+          <input id="ev-time" type="time" value="${esc(ev.startTime || '')}" />
+        </div>
+        <div class="field span-2">
+          <label for="ev-venue">Place</label>
+          <input id="ev-venue" value="${esc(ev.venue || '')}" placeholder="The backyard, 12 King St…" />
+        </div>
+        <div class="field">
           <label for="ev-status">Status</label>
           <select id="ev-status">
             ${['draft', 'active', 'ended'].map((s) =>
@@ -708,6 +721,13 @@
               <span>
                 <strong>Hall of Fame</strong>
                 <small>Quiz leaderboard from the event home page</small>
+              </span>
+            </label>
+            <label class="feature-card">
+              <input type="checkbox" id="ev-rsvp" ${ev.enableRsvp !== false ? 'checked' : ''} />
+              <span>
+                <strong>RSVP</strong>
+                <small>Guests say if they can come, and how many</small>
               </span>
             </label>
             <label class="feature-card">
@@ -980,6 +1000,40 @@
     }
   }
 
+  function rsvpPanel(data) {
+    if (!data) return '<p class="meta">Loading RSVPs…</p>';
+    const summary = data.summary || { yes: 0, no: 0, maybe: 0, coming: 0 };
+    const rows = data.entries || [];
+    const label = { yes: 'Coming', maybe: 'Maybe', no: 'Can’t come' };
+    const list = rows.length ? `
+      <div class="gb-admin-list">
+        ${rows.map((e) => `
+          <article class="card">
+            <div class="row" style="justify-content:space-between;align-items:flex-start">
+              <div>
+                <strong>${esc(e.name)}</strong>
+                <p class="meta">${esc(label[e.status] || e.status)}${e.status === 'no' ? '' : ` · ${e.partySize} ${e.partySize === 1 ? 'person' : 'people'}`}</p>
+                ${e.note ? `<p style="margin-top:8px">${esc(e.note)}</p>` : ''}
+              </div>
+              <button class="btn btn-ghost btn-sm" type="button" data-del-rsvp="${esc(e.id)}">Delete</button>
+            </div>
+          </article>`).join('')}
+      </div>` : '<p class="empty">No RSVPs yet. Guests reply from the event page when RSVP is turned on.</p>';
+    return `
+      <p class="hint">${summary.coming} coming · ${summary.yes} yes · ${summary.maybe} maybe · ${summary.no} no. Notes stay here and are not shown to other guests.</p>
+      ${list}`;
+  }
+
+  async function loadRsvp() {
+    try {
+      const data = await api('/events/' + state.eventId + '/rsvp');
+      if (state.detail) state.detail.rsvp = data;
+    } catch (err) {
+      toast(err.message, 'err');
+      if (state.detail) state.detail.rsvp = { count: 0, summary: { yes: 0, no: 0, maybe: 0, coming: 0 }, entries: [] };
+    }
+  }
+
   async function loadGuestbook() {
     try {
       const data = await api('/events/' + state.eventId + '/guestbook');
@@ -1030,6 +1084,7 @@
         <button class="tab ${state.tab === 'quiz' ? 'active' : ''}" data-tab="quiz">Quiz</button>
         <button class="tab ${state.tab === 'questions' ? 'active' : ''}" data-tab="questions">Questions (${(detail.questions || []).length})</button>
         <button class="tab ${state.tab === 'guestbook' ? 'active' : ''}" data-tab="guestbook">Guest book (${ev.guestbookCount || (detail.guestbook && detail.guestbook.count) || 0})</button>
+        <button class="tab ${state.tab === 'rsvp' ? 'active' : ''}" data-tab="rsvp">RSVPs (${(detail.rsvp && detail.rsvp.summary && detail.rsvp.summary.coming) || 0} coming)</button>
         <button class="tab ${state.tab === 'media' ? 'active' : ''}" data-tab="media">Media</button>
         <button class="tab ${state.tab === 'scores' ? 'active' : ''}" data-tab="scores">Scores (${ev.scoreCount || (detail.scores && detail.scores.count) || 0})</button>
       </div>`;
@@ -1039,6 +1094,7 @@
     else if (state.tab === 'quiz') body = quizFields(detail.quiz);
     else if (state.tab === 'scores') body = scoresPanel(detail.scores);
     else if (state.tab === 'guestbook') body = guestbookPanel(detail.guestbook);
+    else if (state.tab === 'rsvp') body = rsvpPanel(detail.rsvp);
     else if (state.tab === 'media') body = mediaPanel();
     else {
       const qs = detail.questions || [];
@@ -1080,6 +1136,7 @@
         state.tab = btn.getAttribute('data-tab');
         if (state.tab === 'scores' && !(state.detail && state.detail.scores)) await loadScores();
         if (state.tab === 'guestbook' && !(state.detail && state.detail.guestbook)) await loadGuestbook();
+        if (state.tab === 'rsvp' && !(state.detail && state.detail.rsvp)) await loadRsvp();
         if (state.tab === 'media') await loadMedia();
         renderEditor();
       });
@@ -1169,6 +1226,17 @@
       bindDropzones(true);
       bindMediaDeletes();
     }
+    $app.querySelectorAll('[data-del-rsvp]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this RSVP?')) return;
+        try {
+          await api('/events/' + state.eventId + '/rsvp/' + btn.getAttribute('data-del-rsvp'), { method: 'DELETE' });
+          toast('RSVP deleted');
+          await loadRsvp();
+          renderEditor();
+        } catch (err) { toast(err.message, 'err'); }
+      });
+    });
     $app.querySelectorAll('[data-del-gb]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         if (!confirm('Delete this guest book message?')) return;
@@ -1530,6 +1598,9 @@
       slug: val('ev-slug'),
       occasionType: occasionSel === 'Other' ? (val('ev-occasion-custom').trim() || 'Other') : occasionSel,
       eventDate: val('ev-date') || null,
+      startTime: val('ev-time') || null,
+      venue: val('ev-venue') || '',
+      enableRsvp: val('ev-rsvp'),
       status: val('ev-status'),
       headerEmoji: val('ev-emoji'),
       description: val('ev-description'),

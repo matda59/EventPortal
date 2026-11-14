@@ -17,6 +17,7 @@
   const MUSIC_URL    = `/api/events/${EVENT_SLUG}/music`;
   const GUESTBOOK_URL = `/api/events/${EVENT_SLUG}/guestbook`;
   const GALLERY_URL = `/api/events/${EVENT_SLUG}/gallery`;
+  const RSVP_URL = `/api/events/${EVENT_SLUG}/rsvp`;
   const QUESTIONS_URL = `/api/events/${EVENT_SLUG}/questions`;
 
   // ── App state ──────────────────────────────────────────────────────
@@ -33,6 +34,9 @@
     galleryName: '',
     galleryItems: null,
     addQuestionName: '',
+    rsvpName: '',
+    rsvpStatus: 'yes',
+    rsvpSummary: null,
     guestbookAvatar: '',
     guestbookAvatarFile: null,
     lightboxIndex: 0,
@@ -51,6 +55,7 @@
     home:       $('screen-home'),
     guestbook:  $('screen-guestbook'),
     gallery:    $('screen-gallery'),
+    rsvp:       $('screen-rsvp'),
     hof:        $('screen-hof'),
     music:      $('screen-music'),
     welcome:    $('screen-welcome'),
@@ -86,6 +91,7 @@
       enableGallery:     f.enableGallery !== false,
       enableMusic:       f.enableMusic !== false,
       enableGuestbook:   !!f.enableGuestbook,
+      enableRsvp:        f.enableRsvp !== false,
       status:            f.status || 'active',
     };
   }
@@ -97,6 +103,8 @@
     if ($('home-name')) $('home-name').textContent = title;
     if ($('home-kicker')) $('home-kicker').textContent = subtitle || '';
     if ($('home-description')) $('home-description').textContent = message || '';
+    if ($('home-when')) $('home-when').hidden = true;
+    if ($('home-countdown')) $('home-countdown').hidden = true;
     if ($('home-nav')) {
       $('home-nav').innerHTML = '';
       addMusicTile($('home-nav'));
@@ -248,6 +256,41 @@
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
+  function formatStartTime(value) {
+    const match = String(value || '').match(/^(\d{2}):(\d{2})/);
+    if (!match) return '';
+    let hour = Number(match[1]);
+    const minute = match[2];
+    const suffix = hour >= 12 ? 'pm' : 'am';
+    hour = hour % 12 || 12;
+    return minute === '00' ? `${hour} ${suffix}` : `${hour}:${minute} ${suffix}`;
+  }
+
+  function eventMoment(dateStr, timeStr) {
+    const parts = String(dateStr || '').split('-').map(Number);
+    if (parts.length < 3 || parts.some((n) => !n)) return null;
+    const match = String(timeStr || '').match(/^(\d{2}):(\d{2})/);
+    const hour = match ? Number(match[1]) : 0;
+    const minute = match ? Number(match[2]) : 0;
+    return new Date(parts[0], parts[1] - 1, parts[2], hour, minute);
+  }
+
+  function countdownLabel(dateStr, timeStr) {
+    const when = eventMoment(dateStr, timeStr);
+    if (!when) return '';
+    const diff = when.getTime() - Date.now();
+    if (diff <= 0) return '';
+    const days = Math.round(diff / 86400000);
+    if (!timeStr && days >= 1) return days === 1 ? 'Tomorrow' : `In ${days} days`;
+    if (diff >= 86400000) {
+      const whole = Math.floor(diff / 86400000);
+      return whole === 1 ? 'Tomorrow' : `In ${whole} days`;
+    }
+    const hours = Math.floor(diff / 3600000);
+    if (hours >= 1) return hours === 1 ? 'In 1 hour' : `In ${hours} hours`;
+    return 'Starting soon';
+  }
+
   function galleryItems(ecard) {
     const photos = (ecard && Array.isArray(ecard.photos)) ? ecard.photos : [];
     return photos.filter((p) => p && p.src);
@@ -354,6 +397,9 @@
     if (guestFlags().enableGallery) {
       try { await loadGalleryItems(); } catch { state.galleryItems = null; }
     }
+    if (guestFlags().enableRsvp) {
+      try { state.rsvpSummary = (await apiJson(RSVP_URL)).summary; } catch { state.rsvpSummary = null; }
+    }
     renderHome();
     showScreen('home');
   }
@@ -378,6 +424,18 @@
       $('home-description').textContent =
         meta.description || ecard.message || meta.welcomeMessage || copy.greeting;
     }
+    const when = [formatStartTime(meta.startTime), meta.venue].filter(Boolean).join(' · ');
+    const whenEl = $('home-when');
+    if (whenEl) {
+      whenEl.textContent = when;
+      whenEl.hidden = !when;
+    }
+    const countdown = countdownLabel(meta.eventDate, meta.startTime);
+    const countEl = $('home-countdown');
+    if (countEl) {
+      countEl.textContent = countdown;
+      countEl.hidden = !countdown;
+    }
 
     const hero = $('home-hero');
     if (hero) {
@@ -392,6 +450,20 @@
     nav.innerHTML = '';
 
     const tiles = [];
+    if (f.enableRsvp) {
+      const summary = state.rsvpSummary || {};
+      const coming = summary.coming || 0;
+      const maybe = summary.maybe || 0;
+      const hint = coming
+        ? `${coming} coming${maybe ? ` · ${maybe} maybe` : ''} · add yours`
+        : (maybe ? `${maybe} maybe · add yours` : 'Say if you can make it');
+      tiles.push({
+        id: 'rsvp',
+        emoji: '✉️',
+        title: 'RSVP',
+        hint,
+      });
+    }
     if (f.enableQuiz) {
       const count = state.questions.length;
       tiles.push({
@@ -455,6 +527,7 @@
         `<span class="home-tile-hint">${escHtml(t.hint)}</span>`;
       btn.addEventListener('click', () => {
         if (t.id === 'quiz') openQuiz();
+        else if (t.id === 'rsvp') openRsvp();
         else if (t.id === 'guestbook') openGuestbook();
         else if (t.id === 'gallery') openGallery();
         else if (t.id === 'hof') openHof();
@@ -1047,6 +1120,10 @@
       if (fromResults && $('screen-results')?.classList.contains('active')) goHome();
     });
     $('guestbook-form')?.addEventListener('submit', onGuestbookSubmit);
+    $('rsvp-form')?.addEventListener('submit', onRsvpSubmit);
+    document.querySelectorAll('[data-rsvp-status]').forEach((btn) => {
+      btn.addEventListener('click', () => setRsvpStatus(btn.getAttribute('data-rsvp-status')));
+    });
     $('gallery-form')?.addEventListener('submit', onGallerySubmit);
     $('question-form')?.addEventListener('submit', onQuestionSubmit);
     $('quiz-add-toggle')?.addEventListener('click', () => {
@@ -1199,6 +1276,114 @@
         <div class="guestbook-entry-head">${avatarMarkup(e.avatar)}<strong>${escHtml(e.name)}</strong></div>
         <p>${escHtml(e.message)}</p>
       </article>`).join('');
+  }
+
+  function setRsvpStatus(status) {
+    state.rsvpStatus = status === 'no' || status === 'maybe' ? status : 'yes';
+    document.querySelectorAll('[data-rsvp-status]').forEach((btn) => {
+      btn.setAttribute('aria-pressed', btn.getAttribute('data-rsvp-status') === state.rsvpStatus ? 'true' : 'false');
+    });
+    const wrap = $('rsvp-count-wrap');
+    if (wrap) wrap.hidden = state.rsvpStatus === 'no';
+  }
+
+  function renderRsvpList(data) {
+    const list = $('rsvp-list');
+    const summary = (data && data.summary) || { coming: 0, maybe: 0 };
+    const entries = (data && data.entries) || [];
+    state.rsvpSummary = summary;
+    if (!list) return;
+    if (!entries.length) {
+      list.innerHTML = '<p class="hof-empty">No replies yet. Be the first.</p>';
+      return;
+    }
+    const bits = [];
+    if (summary.coming) bits.push(`${summary.coming} coming`);
+    if (summary.maybe) bits.push(`${summary.maybe} maybe`);
+    const head = bits.length ? `<p class="hof-empty">${bits.join(' · ')}</p>` : '';
+    const rows = entries.map((entry) => {
+      const count = entry.status === 'yes' || entry.status === 'maybe'
+        ? ` · ${entry.partySize}`
+        : '';
+      const word = entry.status === 'maybe' ? 'Maybe' : 'Coming';
+      return `<article class="question-bank-item"><span><strong>${escHtml(entry.name)}</strong> ${escHtml(word)}${count}</span></article>`;
+    }).join('');
+    list.innerHTML = head + rows;
+  }
+
+  async function openRsvp() {
+    const name = state.rsvpName || rememberedName();
+    if (name && $('rsvp-name') && !$('rsvp-name').value) $('rsvp-name').value = name;
+    const errEl = $('rsvp-error');
+    const okEl = $('rsvp-ok');
+    if (errEl) errEl.hidden = true;
+    if (okEl) okEl.hidden = true;
+    setRsvpStatus(state.rsvpStatus || 'yes');
+    showScreen('rsvp');
+    try {
+      renderRsvpList(await apiJson(RSVP_URL));
+    } catch (err) {
+      renderRsvpList({ summary: { coming: 0, maybe: 0 }, entries: [] });
+      if (errEl) {
+        errEl.textContent = err.message || 'Could not load RSVPs.';
+        errEl.hidden = false;
+      }
+    }
+  }
+
+  async function onRsvpSubmit(e) {
+    e.preventDefault();
+    const errEl = $('rsvp-error');
+    const okEl = $('rsvp-ok');
+    const btn = $('rsvp-submit');
+    if (errEl) errEl.hidden = true;
+    if (okEl) okEl.hidden = true;
+    const name = $('rsvp-name').value.trim();
+    const note = $('rsvp-note').value.trim();
+    const status = state.rsvpStatus || 'yes';
+    const partySize = status === 'no' ? 0 : Number($('rsvp-count').value);
+    if (!name) {
+      errEl.textContent = 'Please enter your name.';
+      errEl.hidden = false;
+      $('rsvp-name').focus();
+      return;
+    }
+    if (status !== 'no' && (!Number.isInteger(partySize) || partySize < 1 || partySize > 10)) {
+      errEl.textContent = 'Say how many people are coming, from 1 to 10.';
+      errEl.hidden = false;
+      $('rsvp-count').focus();
+      return;
+    }
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+    }
+    try {
+      const data = await apiJson(RSVP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, status, partySize, note }),
+      });
+      state.rsvpName = name;
+      $('rsvp-note').value = '';
+      if (okEl) {
+        okEl.textContent = data.updated
+          ? 'Updated. The hosts have your new reply.'
+          : 'Saved. The hosts have your reply.';
+        okEl.hidden = false;
+      }
+      renderRsvpList(data);
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = err.message || 'Unable to save RSVP.';
+        errEl.hidden = false;
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Send RSVP';
+      }
+    }
   }
 
   async function openGuestbook() {
