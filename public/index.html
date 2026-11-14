@@ -135,8 +135,47 @@
         <input id="player-name" class="text-input" type="text" maxlength="30"
                placeholder="Enter your name…" autocomplete="off" />
         <p id="name-error" class="error-text" role="alert" hidden>Please enter your name to start.</p>
+        <p id="quiz-empty-note" class="quiz-empty-note" hidden>No questions yet. Add one below, then start.</p>
         <button type="submit" class="btn btn-primary btn-block">Start Quiz →</button>
       </form>
+      <div id="quiz-add" class="quiz-add">
+        <h2>Add a question</h2>
+        <p class="lead">Write one for the other guests. Fill in at least two answers and mark the right one.</p>
+        <form id="question-form" class="name-form" novalidate>
+          <label for="add-question-name" class="field-label">Your name</label>
+          <input id="add-question-name" class="text-input" type="text" maxlength="30"
+                 placeholder="Enter your name…" autocomplete="name" />
+          <label for="add-question-text" class="field-label" style="margin-top:14px">Question</label>
+          <textarea id="add-question-text" class="text-input guestbook-message" maxlength="400"
+                    placeholder="What should everyone answer?" rows="2"></textarea>
+          <span class="field-label" style="margin-top:14px">Answers</span>
+          <div class="quiz-options">
+            <label class="quiz-option">
+              <input type="radio" name="add-question-correct" value="0" checked aria-label="Mark answer A as correct" />
+              <input id="add-question-opt-0" class="text-input" type="text" maxlength="120" placeholder="Answer A" />
+            </label>
+            <label class="quiz-option">
+              <input type="radio" name="add-question-correct" value="1" aria-label="Mark answer B as correct" />
+              <input id="add-question-opt-1" class="text-input" type="text" maxlength="120" placeholder="Answer B" />
+            </label>
+            <label class="quiz-option">
+              <input type="radio" name="add-question-correct" value="2" aria-label="Mark answer C as correct" />
+              <input id="add-question-opt-2" class="text-input" type="text" maxlength="120" placeholder="Answer C (optional)" />
+            </label>
+            <label class="quiz-option">
+              <input type="radio" name="add-question-correct" value="3" aria-label="Mark answer D as correct" />
+              <input id="add-question-opt-3" class="text-input" type="text" maxlength="120" placeholder="Answer D (optional)" />
+            </label>
+          </div>
+          <label for="add-question-fact" class="field-label" style="margin-top:14px">Fun fact <span class="optional">(optional)</span></label>
+          <input id="add-question-fact" class="text-input" type="text" maxlength="400"
+                 placeholder="Shown after someone answers…" />
+          <p id="question-form-error" class="error-text" role="alert" hidden></p>
+          <p id="question-form-ok" class="quiz-added" hidden>Added. Guests can answer it now.</p>
+          <button type="submit" class="btn btn-primary btn-block" id="question-submit">Add question</button>
+        </form>
+        <div id="question-bank" class="question-bank"></div>
+      </div>
     </section>
 
     <section id="screen-quiz" class="screen card">

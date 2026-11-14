@@ -371,6 +371,41 @@ button.music-track.is-playing { border-color: var(--primary-red); color: var(--p
 .home-tile-hint { font-size: 0.88rem; color: var(--text-muted); line-height: 1.35; }
 
 .optional { font-weight: 600; color: var(--text-muted); }
+.quiz-empty-note { margin-top: 12px; color: var(--text-muted); font-size: 0.95rem; }
+.quiz-add {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border-soft);
+  text-align: left;
+}
+.quiz-add h2 { font-size: 1.35rem; margin-bottom: 6px; }
+.quiz-add .lead { margin-bottom: 16px; }
+.quiz-options { display: grid; gap: 8px; margin-top: 8px; }
+.quiz-option { display: flex; align-items: center; gap: 10px; }
+.quiz-option input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--primary-red);
+}
+.quiz-option .text-input { margin: 0; }
+.quiz-added { margin-top: 10px; font-weight: 700; color: #2f7d4a; }
+.question-bank {
+  margin-top: 18px;
+  display: grid;
+  gap: 8px;
+  max-height: min(40vh, 320px);
+  overflow: auto;
+}
+.question-bank-item {
+  padding: 10px 12px;
+  background: var(--bg-earth);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-soft);
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+.question-bank-item strong { color: var(--primary-red); }
 .gallery-form { margin-bottom: 22px; }
 .file-input {
   display: block;

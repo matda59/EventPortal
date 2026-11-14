@@ -90,6 +90,55 @@ function questionsForQuiz(quizId) {
   return db.prepare('SELECT * FROM quiz_questions WHERE quiz_id = ? ORDER BY sort_order').all(quizId);
 }
 
+function presentQuestion(eventId, q) {
+  return {
+    id:          q.id,
+    submittedBy: q.submitted_by,
+    type:        q.question_type,
+    question:    q.question,
+    image:       q.image_url || null,
+    options:     parseJson(q.options_json, []),
+    funFact:     q.fun_fact || null,
+    audioClip:   files.presentClip(eventId, q.audio_clip || null),
+  };
+}
+
+function ensureQuiz(event) {
+  const existing = quizForEvent(event.id);
+  if (existing) return existing;
+  const id = uid();
+  db.prepare(`
+    INSERT INTO quizzes
+      (id, event_id, title, subtitle, honoree, welcome_message, hero_image,
+       audio_json, score_tiers_json, ecard_json, theme_json)
+    VALUES (?, ?, ?, NULL, NULL, NULL, NULL, '{}', '[]', '{}', '{}')
+  `).run(id, event.id, event.name || 'Quiz');
+  return quizForEvent(event.id);
+}
+
+function cleanGuestQuestion(body) {
+  const name = readPlayerName(body?.name);
+  if (!name) return { error: 'Please enter your name.' };
+
+  const question = typeof body?.question === 'string' ? body.question.trim().slice(0, 400) : '';
+  if (!question) return { error: 'Write a question.' };
+
+  const raw = Array.isArray(body?.options) ? body.options : [];
+  const options = raw
+    .map((option) => String(option ?? '').trim().slice(0, 120))
+    .filter(Boolean);
+  if (options.length < 2) return { error: 'Add at least two answers.' };
+  if (options.length > 6) return { error: 'Use six answers or fewer.' };
+
+  const correctIndex = Number(body?.correctIndex);
+  if (!Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex >= options.length) {
+    return { error: 'Mark which answer is correct.' };
+  }
+
+  const funFact = typeof body?.funFact === 'string' ? body.funFact.trim().slice(0, 400) : '';
+  return { name, question, options, correctIndex, funFact: funFact || null };
+}
+
 function fetchScores(eventId) {
   return db.prepare('SELECT * FROM score_submissions WHERE event_id = ?').all(eventId);
 }
@@ -148,6 +197,8 @@ const limitAnswers  = rateLimit({ windowMs: 10 * 60 * 1000, max: 240 });
 const limitScores   = rateLimit({ windowMs: 10 * 60 * 1000, max: 60 });
 const limitGuestbook = rateLimit({ windowMs: 10 * 60 * 1000, max: 30 });
 const limitGallery = rateLimit({ windowMs: 10 * 60 * 1000, max: 20 });
+const limitQuestions = rateLimit({ windowMs: 10 * 60 * 1000, max: 20 });
+const MAX_QUESTIONS = 80;
 
 function readPlayerName(value) {
   if (typeof value !== 'string') return null;
@@ -326,16 +377,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
       ecard:      parseJson(quiz?.ecard_json, {}),
       audio:      presentAudio(event.id, parseJson(quiz?.audio_json, {})),
       scoreTiers: parseJson(quiz?.score_tiers_json, []),
-      questions:  event.enable_quiz ? questions.map((q) => ({
-        id:          q.id,
-        submittedBy: q.submitted_by,
-        type:        q.question_type,
-        question:    q.question,
-        image:       q.image_url || null,
-        options:     parseJson(q.options_json, []),
-        funFact:     q.fun_fact   || null,
-        audioClip:   files.presentClip(event.id, q.audio_clip || null),
-      })) : [],
+      questions:  event.enable_quiz ? questions.map((q) => presentQuestion(event.id, q)) : [],
       flags: {
         enableQuiz:        !!event.enable_quiz,
         enableLeaderboard: !!event.enable_leaderboard,
@@ -348,6 +390,66 @@ app.get('/api/events/:slug/public-config', (req, res) => {
   } catch (err) {
     console.error('GET public-config:', err);
     res.status(500).json({ error: 'Unable to load event config.' });
+  }
+});
+
+// ── Guest questions ───────────────────────────────────────────────────────────
+
+app.get('/api/events/:slug/questions', (req, res) => {
+  try {
+    const event = findActiveEvent(req.params.slug);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    if (!event.enable_quiz) return res.status(403).json({ error: 'Quiz is not enabled for this event.' });
+    const quiz = quizForEvent(event.id);
+    const questions = quiz ? questionsForQuiz(quiz.id) : [];
+    res.json({ questions: questions.map((q) => presentQuestion(event.id, q)) });
+  } catch (err) {
+    console.error('GET questions:', err);
+    res.status(500).json({ error: 'Unable to read quiz questions.' });
+  }
+});
+
+app.post('/api/events/:slug/questions', limitQuestions, (req, res) => {
+  try {
+    const event = findActiveEvent(req.params.slug);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    if (!event.enable_quiz) return res.status(403).json({ error: 'Quiz is not enabled for this event.' });
+
+    const parsed = cleanGuestQuestion(req.body || {});
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+
+    const quiz = ensureQuiz(event);
+    const count = db.prepare(
+      'SELECT COUNT(*) AS n FROM quiz_questions WHERE quiz_id = ?'
+    ).get(quiz.id).n;
+    if (count >= MAX_QUESTIONS) {
+      return res.status(400).json({ error: 'This quiz is full.' });
+    }
+
+    const max = db.prepare(
+      'SELECT COALESCE(MAX(sort_order), -1) AS n FROM quiz_questions WHERE quiz_id = ?'
+    ).get(quiz.id).n;
+    const id = uid();
+    db.prepare(`
+      INSERT INTO quiz_questions
+        (id, quiz_id, sort_order, submitted_by, question_type, question,
+         image_url, options_json, correct_index, fun_fact, audio_clip)
+      VALUES (?, ?, ?, ?, 'text', ?, NULL, ?, ?, ?, NULL)
+    `).run(
+      id, quiz.id, max + 1, parsed.name, parsed.question,
+      JSON.stringify(parsed.options), parsed.correctIndex, parsed.funFact,
+    );
+    db.prepare("UPDATE events SET updated_at = datetime('now') WHERE id = ?").run(event.id);
+
+    const questions = questionsForQuiz(quiz.id);
+    const added = questions.find((q) => q.id === id);
+    res.status(201).json({
+      question: presentQuestion(event.id, added),
+      questions: questions.map((q) => presentQuestion(event.id, q)),
+    });
+  } catch (err) {
+    console.error('POST questions:', err);
+    res.status(500).json({ error: 'Unable to save question.' });
   }
 });
 
@@ -373,7 +475,11 @@ app.post('/api/events/:slug/sessions', limitSessions, (req, res) => {
       VALUES (?, ?, ?, ?, 0, ?)
     `).run(id, event.id, name, JSON.stringify(questions.map((q) => q.id)), questions.length);
 
-    res.status(201).json({ sessionId: id, totalQuestions: questions.length });
+    res.status(201).json({
+      sessionId: id,
+      totalQuestions: questions.length,
+      questions: questions.map((q) => presentQuestion(event.id, q)),
+    });
   } catch (err) {
     console.error('POST sessions:', err);
     res.status(500).json({ error: 'Unable to start quiz.' });

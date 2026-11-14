@@ -145,6 +145,7 @@ addColumnIfMissing('events', 'enable_gallery', 'enable_gallery INTEGER NOT NULL 
 addColumnIfMissing('events', 'enable_music', 'enable_music INTEGER NOT NULL DEFAULT 1');
 addColumnIfMissing('events', 'enable_guestbook', 'enable_guestbook INTEGER NOT NULL DEFAULT 0');
 addColumnIfMissing('events', 'description', 'description TEXT');
+addColumnIfMissing('quiz_questions', 'submitted_by', 'submitted_by TEXT');
 
 // The guestbook index used to live in the schema script above. If an older
 // table is missing created_at, that statement throws and the process never

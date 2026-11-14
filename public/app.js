@@ -17,6 +17,7 @@
   const MUSIC_URL    = `/api/events/${EVENT_SLUG}/music`;
   const GUESTBOOK_URL = `/api/events/${EVENT_SLUG}/guestbook`;
   const GALLERY_URL = `/api/events/${EVENT_SLUG}/gallery`;
+  const QUESTIONS_URL = `/api/events/${EVENT_SLUG}/questions`;
 
   // ── App state ──────────────────────────────────────────────────────
   const state = {
@@ -31,6 +32,7 @@
     sessionId: null,
     galleryName: '',
     galleryItems: null,
+    addQuestionName: '',
     guestbookAvatar: '',
     guestbookAvatarFile: null,
     lightboxIndex: 0,
@@ -113,6 +115,7 @@
   function applyGuestFlags() {
     const f = guestFlags();
     $('name-form').hidden       = !f.enableQuiz;
+    if ($('quiz-add')) $('quiz-add').hidden = !f.enableQuiz;
     $('hall-of-fame').hidden    = !f.enableLeaderboard;
     $('play-again-btn').hidden  = !f.enableQuiz;
   }
@@ -391,11 +394,14 @@
 
     const tiles = [];
     if (f.enableQuiz) {
+      const count = state.questions.length;
       tiles.push({
         id: 'quiz',
         emoji: '❓',
         title: 'Quiz',
-        hint: meta.title ? `Play “${meta.title}”` : 'Test what you know',
+        hint: count
+          ? `${count} question${count === 1 ? '' : 's'} · play or add yours`
+          : 'Add a question, then play',
       });
     }
     if (f.enableGuestbook) {
@@ -538,12 +544,137 @@
     nav.appendChild(btn);
   }
 
-  function openQuiz() {
-    if (state.guestbookName && $('player-name') && !$('player-name').value) {
-      $('player-name').value = state.guestbookName;
+  function rememberedName() {
+    return state.addQuestionName || state.guestbookName || state.galleryName || state.playerName || '';
+  }
+
+  function renderQuestionBank() {
+    const bank = $('question-bank');
+    const note = $('quiz-empty-note');
+    const list = state.questions || [];
+    if (note) note.hidden = list.length > 0;
+    if (!bank) return;
+    if (!list.length) {
+      bank.innerHTML = '<p class="hof-empty">No questions yet. Add the first one.</p>';
+      return;
     }
+    bank.innerHTML = list.map((q) => {
+      const by = q.submittedBy ? `<strong>${escHtml(q.submittedBy)}</strong> ` : '';
+      return `<article class="question-bank-item">${by}${escHtml(q.question || '')}</article>`;
+    }).join('');
+  }
+
+  async function refreshQuestions() {
+    const data = await apiJson(QUESTIONS_URL);
+    if (!Array.isArray(data.questions)) return state.questions;
+    state.questions = data.questions;
+    if (state.config) state.config.questions = data.questions;
+    return state.questions;
+  }
+
+  async function openQuiz() {
+    const name = rememberedName();
+    if (name && $('player-name') && !$('player-name').value) $('player-name').value = name;
+    if (name && $('add-question-name') && !$('add-question-name').value) $('add-question-name').value = name;
+    const errEl = $('question-form-error');
+    const okEl = $('question-form-ok');
+    if (errEl) errEl.hidden = true;
+    if (okEl) okEl.hidden = true;
     showScreen('welcome');
-    if (guestFlags().enableQuiz) setTimeout(() => $('player-name') && $('player-name').focus(), 300);
+    renderQuestionBank();
+    if (guestFlags().enableQuiz) {
+      try {
+        await refreshQuestions();
+        renderQuestionBank();
+      } catch { /* keep the questions loaded with the event */ }
+      setTimeout(() => {
+        const focusId = state.questions.length ? 'player-name' : 'add-question-name';
+        $(focusId)?.focus();
+      }, 300);
+    }
+  }
+
+  function collectNewQuestion() {
+    const marked = Number(document.querySelector('input[name="add-question-correct"]:checked')?.value ?? 0);
+    const options = [];
+    let correctIndex = -1;
+    for (let i = 0; i < 4; i++) {
+      const value = $(`add-question-opt-${i}`)?.value.trim() || '';
+      if (!value) continue;
+      if (i === marked) correctIndex = options.length;
+      options.push(value);
+    }
+    return { options, correctIndex };
+  }
+
+  async function onQuestionSubmit(e) {
+    e.preventDefault();
+    const errEl = $('question-form-error');
+    const okEl = $('question-form-ok');
+    const btn = $('question-submit');
+    if (errEl) errEl.hidden = true;
+    if (okEl) okEl.hidden = true;
+    const name = $('add-question-name').value.trim();
+    const question = $('add-question-text').value.trim();
+    const funFact = $('add-question-fact').value.trim();
+    const { options, correctIndex } = collectNewQuestion();
+    if (!name) {
+      errEl.textContent = 'Please enter your name.';
+      errEl.hidden = false;
+      $('add-question-name').focus();
+      return;
+    }
+    if (!question) {
+      errEl.textContent = 'Write a question.';
+      errEl.hidden = false;
+      $('add-question-text').focus();
+      return;
+    }
+    if (options.length < 2) {
+      errEl.textContent = 'Add at least two answers.';
+      errEl.hidden = false;
+      $('add-question-opt-0').focus();
+      return;
+    }
+    if (correctIndex < 0) {
+      errEl.textContent = 'Mark the correct answer, and make sure that answer has text.';
+      errEl.hidden = false;
+      return;
+    }
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Adding…';
+    }
+    try {
+      const data = await apiJson(QUESTIONS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, question, options, correctIndex, funFact }),
+      });
+      state.addQuestionName = name;
+      if (!$('player-name').value) $('player-name').value = name;
+      if (Array.isArray(data.questions)) {
+        state.questions = data.questions;
+        if (state.config) state.config.questions = data.questions;
+      }
+      $('add-question-text').value = '';
+      $('add-question-fact').value = '';
+      for (let i = 0; i < 4; i++) $(`add-question-opt-${i}`).value = '';
+      const first = document.querySelector('input[name="add-question-correct"][value="0"]');
+      if (first) first.checked = true;
+      if (okEl) okEl.hidden = false;
+      renderQuestionBank();
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = err.message || 'Unable to save question.';
+        errEl.hidden = false;
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Add question';
+      }
+    }
   }
 
   function galleryCaption(item) {
@@ -861,6 +992,7 @@
     });
     $('guestbook-form')?.addEventListener('submit', onGuestbookSubmit);
     $('gallery-form')?.addEventListener('submit', onGallerySubmit);
+    $('question-form')?.addEventListener('submit', onQuestionSubmit);
     $('gallery-grid')?.addEventListener('click', onGalleryOpen);
     renderAvatarChoices();
     wireAvatarPicker();
@@ -1087,6 +1219,10 @@
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ name: state.playerName }),
       });
+      if (Array.isArray(started.questions) && started.questions.length) {
+        state.questions = started.questions;
+        if (state.config) state.config.questions = started.questions;
+      }
       state.sessionId = started.sessionId;
       state.current   = 0;
       state.score     = 0;
