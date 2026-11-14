@@ -12,6 +12,7 @@ const files = require('./files');
 const guestbook = require('./guestbook');
 const gallery = require('./gallery');
 const rsvp = require('./rsvp');
+const requests = require('./requests');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -204,10 +205,28 @@ const limitGuestbook = rateLimit({ windowMs: 10 * 60 * 1000, max: 30 });
 const limitGallery = rateLimit({ windowMs: 10 * 60 * 1000, max: 20 });
 const limitQuestions = rateLimit({ windowMs: 10 * 60 * 1000, max: 20 });
 const limitRsvp = rateLimit({ windowMs: 10 * 60 * 1000, max: 30 });
+const limitRequests = rateLimit({ windowMs: 10 * 60 * 1000, max: 20 });
 const MAX_QUESTIONS = 80;
 
 function rsvpEnabled(event) {
   return event.enable_rsvp == null ? true : !!event.enable_rsvp;
+}
+
+function musicEnabled(event) {
+  return event.enable_music == null ? true : !!event.enable_music;
+}
+
+function presentSchedule(raw) {
+  const list = parseJson(raw, []);
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((item) => item && typeof item.title === 'string' && item.title.trim())
+    .slice(0, 24)
+    .map((item) => ({
+      time: typeof item.time === 'string' ? item.time : '',
+      title: String(item.title).slice(0, 80),
+      note: typeof item.note === 'string' ? item.note.slice(0, 160) : '',
+    }));
 }
 
 function readPlayerName(value) {
@@ -351,6 +370,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
           headerEmoji:    event.header_emoji   || null,
           venue:          event.venue || null,
           startTime:      event.start_time || null,
+          schedule:       [],
           theme:          normalizeTheme(parseJson(event.theme_json || quiz?.theme_json, {})),
         },
         ecard:      {},
@@ -387,6 +407,7 @@ app.get('/api/events/:slug/public-config', (req, res) => {
         headerEmoji:    event.header_emoji   || null,
         venue:          event.venue || null,
         startTime:      event.start_time || null,
+        schedule:       presentSchedule(event.schedule_json),
         theme:          normalizeTheme(parseJson(event.theme_json || quiz?.theme_json, {})),
       },
       ecard:      parseJson(quiz?.ecard_json, {}),
@@ -897,6 +918,39 @@ app.post('/api/events/:slug/rsvp', limitRsvp, (req, res) => {
   } catch (err) {
     console.error('POST rsvp:', err);
     res.status(500).json({ error: 'Unable to save RSVP.' });
+  }
+});
+
+app.get('/api/events/:slug/requests', (req, res) => {
+  try {
+    const event = findActiveEvent(req.params.slug);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    if (!musicEnabled(event)) return res.status(403).json({ error: 'Music is not enabled.' });
+    res.json({ requests: requests.list(event.id).map(requests.serialize) });
+  } catch (err) {
+    console.error('GET requests:', err);
+    res.status(500).json({ error: 'Unable to read song requests.' });
+  }
+});
+
+app.post('/api/events/:slug/requests', limitRequests, (req, res) => {
+  try {
+    const event = findActiveEvent(req.params.slug);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    if (!musicEnabled(event)) return res.status(403).json({ error: 'Music is not enabled.' });
+    const name = readPlayerName(req.body?.name);
+    if (!name) return res.status(400).json({ error: 'Please enter your name.' });
+    const title = typeof req.body?.title === 'string' ? req.body.title.trim().slice(0, 120) : '';
+    if (!title) return res.status(400).json({ error: 'Name the song you want to hear.' });
+    if (requests.count(event.id) >= requests.MAX_REQUESTS) {
+      return res.status(400).json({ error: 'This event already has plenty of requests.' });
+    }
+    const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 160) : '';
+    requests.add(uid(), event.id, name, title, note);
+    res.status(201).json({ requests: requests.list(event.id).map(requests.serialize) });
+  } catch (err) {
+    console.error('POST requests:', err);
+    res.status(500).json({ error: 'Unable to save that request.' });
   }
 });
 

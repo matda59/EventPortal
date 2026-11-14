@@ -50,5 +50,8 @@ In `/admin` → Event:
 - **ended** — guests see “this event has ended”
 - **Enable quiz** off — e-card and welcome only
 - **Enable leaderboard** off — personal score still shows; Hall of Fame is hidden and nothing is posted
-- **RSVP** — guests say if they can come, and how many. Place and start time on the Event tab show on the public home page, with a countdown until the event.
+- **RSVP** — guests say if they can come, and how many. Place and start time on the Event tab show on the public home page, with a countdown until the event. The place is a link that opens Google Maps.
 - Notes on an RSVP stay in `/admin` and are not shown to other guests. Sending the same name again updates that reply.
+- **Running order** — optional rows of time, title, and note on the Event tab. Guests get a Schedule tile only when at least one row has a title.
+- **Share** — the home page copies the event link, or uses the device share sheet when the browser offers one.
+- **Song requests** — on the Music page, guests can ask for a song. Hosts see and delete those on the Song requests tab. Turning music off hides the page and the requests.

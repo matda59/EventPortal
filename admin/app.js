@@ -266,6 +266,8 @@
     ev.enableMusic = val('ev-music');
     ev.enableGuestbook = val('ev-guestbook');
     ev.enableRsvp = val('ev-rsvp');
+    const schedule = readScheduleFromDom();
+    if (schedule !== undefined) ev.schedule = schedule;
     ev.themePreset = val('ev-preset') || 'custom';
     ev.theme = readThemeFromForm();
     const photos = document.getElementById('look-stage') ? readPolaroidsFromDom() : null;
@@ -601,6 +603,26 @@
   }
 
   // ── Editor ─────────────────────────────────────────────────────────
+  function scheduleEditorRows(items) {
+    const list = (Array.isArray(items) && items.length) ? items : [{ time: '', title: '', note: '' }];
+    return list.map((item) => `
+      <div class="schedule-edit" data-schedule-row>
+        <input type="time" class="sch-time" value="${esc(item.time || '')}" aria-label="Time" />
+        <input class="sch-title" value="${esc(item.title || '')}" placeholder="Speeches, cake, dancing…" maxlength="80" aria-label="What happens" />
+        <input class="sch-note" value="${esc(item.note || '')}" placeholder="Note (optional)" maxlength="160" aria-label="Note" />
+        <button type="button" class="btn btn-ghost btn-sm" data-remove-schedule>Remove</button>
+      </div>`).join('');
+  }
+
+  function readScheduleFromDom() {
+    if (!document.getElementById('schedule-editor')) return undefined;
+    return [...document.querySelectorAll('[data-schedule-row]')].map((row) => ({
+      time: (row.querySelector('.sch-time') || {}).value || '',
+      title: ((row.querySelector('.sch-title') || {}).value || '').trim(),
+      note: ((row.querySelector('.sch-note') || {}).value || '').trim(),
+    })).filter((row) => row.title);
+  }
+
   function eventFields(ev, isNew) {
     const theme = Object.assign({}, DEFAULT_THEME, ev.theme || {});
     const selectedTheme = resolveColorThemeId(ev);
@@ -673,6 +695,12 @@
         <div class="field span-2">
           <label for="ev-venue">Place</label>
           <input id="ev-venue" value="${esc(ev.venue || '')}" placeholder="The backyard, 12 King St…" />
+        </div>
+        <div class="field span-2">
+          <label>Running order</label>
+          <p class="hint">Optional. Guests see a Schedule tile once a row has a title. Times are shown as written.</p>
+          <div id="schedule-editor">${scheduleEditorRows(ev.schedule)}</div>
+          <button type="button" class="btn btn-ghost btn-sm" id="add-schedule">Add a moment</button>
         </div>
         <div class="field">
           <label for="ev-status">Status</label>
@@ -1024,6 +1052,38 @@
       ${list}`;
   }
 
+  function requestsPanel(data) {
+    if (!data) return '<p class="meta">Loading song requests…</p>';
+    const rows = data.requests || [];
+    const list = rows.length ? `
+      <div class="gb-admin-list">
+        ${rows.map((e) => `
+          <article class="card">
+            <div class="row" style="justify-content:space-between;align-items:flex-start">
+              <div>
+                <strong>${esc(e.title)}</strong>
+                <p class="meta">${esc(e.name)}</p>
+                ${e.note ? `<p style="margin-top:8px">${esc(e.note)}</p>` : ''}
+              </div>
+              <button class="btn btn-ghost btn-sm" type="button" data-del-request="${esc(e.id)}">Delete</button>
+            </div>
+          </article>`).join('')}
+      </div>` : '<p class="empty">No song requests yet. Guests can ask for a song from the Music page.</p>';
+    return `
+      <p class="hint">${rows.length} request${rows.length === 1 ? '' : 's'}. Guests see the same list on the Music page.</p>
+      ${list}`;
+  }
+
+  async function loadRequests() {
+    try {
+      const data = await api('/events/' + state.eventId + '/requests');
+      if (state.detail) state.detail.requests = data;
+    } catch (err) {
+      toast(err.message, 'err');
+      if (state.detail) state.detail.requests = { count: 0, requests: [] };
+    }
+  }
+
   async function loadRsvp() {
     try {
       const data = await api('/events/' + state.eventId + '/rsvp');
@@ -1085,6 +1145,7 @@
         <button class="tab ${state.tab === 'questions' ? 'active' : ''}" data-tab="questions">Questions (${(detail.questions || []).length})</button>
         <button class="tab ${state.tab === 'guestbook' ? 'active' : ''}" data-tab="guestbook">Guest book (${ev.guestbookCount || (detail.guestbook && detail.guestbook.count) || 0})</button>
         <button class="tab ${state.tab === 'rsvp' ? 'active' : ''}" data-tab="rsvp">RSVPs (${(detail.rsvp && detail.rsvp.summary && detail.rsvp.summary.coming) || 0} coming)</button>
+        <button class="tab ${state.tab === 'requests' ? 'active' : ''}" data-tab="requests">Song requests</button>
         <button class="tab ${state.tab === 'media' ? 'active' : ''}" data-tab="media">Media</button>
         <button class="tab ${state.tab === 'scores' ? 'active' : ''}" data-tab="scores">Scores (${ev.scoreCount || (detail.scores && detail.scores.count) || 0})</button>
       </div>`;
@@ -1095,6 +1156,7 @@
     else if (state.tab === 'scores') body = scoresPanel(detail.scores);
     else if (state.tab === 'guestbook') body = guestbookPanel(detail.guestbook);
     else if (state.tab === 'rsvp') body = rsvpPanel(detail.rsvp);
+    else if (state.tab === 'requests') body = requestsPanel(detail.requests);
     else if (state.tab === 'media') body = mediaPanel();
     else {
       const qs = detail.questions || [];
@@ -1137,6 +1199,7 @@
         if (state.tab === 'scores' && !(state.detail && state.detail.scores)) await loadScores();
         if (state.tab === 'guestbook' && !(state.detail && state.detail.guestbook)) await loadGuestbook();
         if (state.tab === 'rsvp' && !(state.detail && state.detail.rsvp)) await loadRsvp();
+        if (state.tab === 'requests' && !(state.detail && state.detail.requests)) await loadRequests();
         if (state.tab === 'media') await loadMedia();
         renderEditor();
       });
@@ -1197,6 +1260,19 @@
     if (saveEv) saveEv.addEventListener('click', () => saveEvent(isNew));
     const occasion = document.getElementById('ev-occasion');
     if (occasion) occasion.addEventListener('change', syncOccasionUi);
+    document.getElementById('add-schedule')?.addEventListener('click', () => {
+      document.getElementById('schedule-editor')?.insertAdjacentHTML('beforeend', scheduleEditorRows([{}]));
+    });
+    document.getElementById('schedule-editor')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-remove-schedule]');
+      if (!btn) return;
+      const row = btn.closest('[data-schedule-row]');
+      if (document.querySelectorAll('[data-schedule-row]').length <= 1) {
+        row.querySelectorAll('input').forEach((input) => { input.value = ''; });
+        return;
+      }
+      row.remove();
+    });
 
     const saveQuiz = document.getElementById('save-quiz');
     if (saveQuiz) saveQuiz.addEventListener('click', saveQuizCopy);
@@ -1233,6 +1309,17 @@
           await api('/events/' + state.eventId + '/rsvp/' + btn.getAttribute('data-del-rsvp'), { method: 'DELETE' });
           toast('RSVP deleted');
           await loadRsvp();
+          renderEditor();
+        } catch (err) { toast(err.message, 'err'); }
+      });
+    });
+    $app.querySelectorAll('[data-del-request]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this song request?')) return;
+        try {
+          await api('/events/' + state.eventId + '/requests/' + btn.getAttribute('data-del-request'), { method: 'DELETE' });
+          toast('Request deleted');
+          await loadRequests();
           renderEditor();
         } catch (err) { toast(err.message, 'err'); }
       });
@@ -1600,6 +1687,7 @@
       eventDate: val('ev-date') || null,
       startTime: val('ev-time') || null,
       venue: val('ev-venue') || '',
+      schedule: readScheduleFromDom() || [],
       enableRsvp: val('ev-rsvp'),
       status: val('ev-status'),
       headerEmoji: val('ev-emoji'),

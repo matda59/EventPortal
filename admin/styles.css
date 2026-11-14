@@ -453,6 +453,16 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .look-bg-actions { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
 
 .gb-admin-list { display: grid; gap: 10px; }
+.schedule-edit {
+  display: grid;
+  grid-template-columns: 130px 1fr 1fr auto;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+@media (max-width: 700px) {
+  .schedule-edit { grid-template-columns: 1fr; }
+}
 .gb-admin-avatar {
   width: 36px;
   height: 36px;

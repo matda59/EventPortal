@@ -347,6 +347,32 @@ button.music-track.is-playing { border-color: var(--primary-red); color: var(--p
   font-size: 1rem;
 }
 .home-when { color: var(--text-dark); font-weight: 700; }
+.home-place { color: var(--primary-red); font-weight: 800; }
+.home-share {
+  display: inline-flex;
+  margin: 4px auto 10px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--primary-red);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.home-share:hover { text-decoration: underline; }
+.home-share-note { margin: 0 auto 10px; color: var(--text-muted); font-size: 0.92rem; }
+.schedule-list { list-style: none; display: grid; gap: 10px; text-align: left; margin-top: 8px; }
+.schedule-item {
+  padding: 12px 14px;
+  background: var(--bg-earth);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-soft);
+}
+.schedule-item time { display: block; font-weight: 800; color: var(--primary-red); }
+.schedule-item p { margin: 6px 0 0; color: var(--text-muted); }
+.request-form { margin-top: 22px; text-align: left; }
+.request-heading { font-size: 1.15rem; margin: 0 0 10px; }
 .home-countdown { color: var(--primary-red); font-weight: 800; }
 .home-nav { margin-top: 18px; }
 .rsvp-choices { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }

@@ -15,6 +15,7 @@ const files     = require('./files');
 const guestbook = require('./guestbook');
 const gallery   = require('./gallery');
 const rsvp      = require('./rsvp');
+const requests  = require('./requests');
 
 const COOKIE      = 'ep_admin';
 const COOKIE_MAX  = 60 * 60 * 24 * 14;
@@ -111,6 +112,7 @@ function serializeEvent(row, extras = {}) {
     enableRsvp:        row.enable_rsvp == null ? true : !!row.enable_rsvp,
     venue:             row.venue || '',
     startTime:         row.start_time || '',
+    schedule:          parseJson(row.schedule_json, []),
     createdAt:         row.created_at,
     updatedAt:         row.updated_at,
     ...extras,
@@ -194,6 +196,23 @@ function str(value, max, fallback = null) {
   const s = String(value).trim();
   if (!s) return fallback;
   return s.slice(0, max);
+}
+
+function cleanSchedule(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const item of list) {
+    const title = str(item && item.title, 80, '');
+    if (!title) continue;
+    const time = str(item && item.time, 8, '');
+    out.push({
+      time: /^\d{2}:\d{2}$/.test(time || '') ? time : '',
+      title,
+      note: str(item && item.note, 160, '') || '',
+    });
+    if (out.length >= 24) break;
+  }
+  return out;
 }
 
 function ensureQuiz(eventId, title) {
@@ -332,8 +351,8 @@ router.post('/events', (req, res) => {
       INSERT INTO events
         (id, slug, name, description, occasion_type, event_date, status, theme_preset, theme_json,
          header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music, enable_guestbook,
-         enable_rsvp, venue, start_time)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         enable_rsvp, venue, start_time, schedule_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       slugRes.slug,
@@ -353,6 +372,7 @@ router.post('/events', (req, res) => {
       body.enableRsvp === false ? 0 : 1,
       str(body.venue, 120, ''),
       str(body.startTime, 8, null),
+      JSON.stringify(cleanSchedule(body.schedule)),
     );
     ensureQuiz(id, name);
     applyQuizLook(id, body);
@@ -408,7 +428,7 @@ router.put('/events/:id', (req, res) => {
       slug = ?, name = ?, description = ?, occasion_type = ?, event_date = ?, status = ?,
       theme_preset = ?, theme_json = ?, header_emoji = ?,
       enable_quiz = ?, enable_leaderboard = ?, enable_gallery = ?, enable_music = ?, enable_guestbook = ?,
-      enable_rsvp = ?, venue = ?, start_time = ?,
+      enable_rsvp = ?, venue = ?, start_time = ?, schedule_json = ?,
       updated_at = datetime('now')
     WHERE id = ?
   `).run(
@@ -429,6 +449,7 @@ router.put('/events/:id', (req, res) => {
       body.enableRsvp === undefined ? (event.enable_rsvp == null ? 1 : event.enable_rsvp) : (body.enableRsvp ? 1 : 0),
       body.venue === undefined ? (event.venue || '') : str(body.venue, 120, ''),
       body.startTime === undefined ? event.start_time : str(body.startTime, 8, null),
+      body.schedule === undefined ? (event.schedule_json || '[]') : JSON.stringify(cleanSchedule(body.schedule)),
       event.id,
   );
 
@@ -481,8 +502,8 @@ router.post('/events/:id/duplicate', (req, res) => {
       INSERT INTO events
         (id, slug, name, description, occasion_type, event_date, status, theme_preset, theme_json,
          header_emoji, enable_quiz, enable_leaderboard, enable_gallery, enable_music, enable_guestbook,
-         enable_rsvp, venue, start_time)
-      VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         enable_rsvp, venue, start_time, schedule_json)
+      VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       newId, slug, name, event.description || '',
       event.occasion_type, event.event_date,
@@ -495,6 +516,7 @@ router.post('/events/:id/duplicate', (req, res) => {
       event.enable_rsvp == null ? 1 : (event.enable_rsvp ? 1 : 0),
       event.venue || '',
       event.start_time || null,
+      event.schedule_json || '[]',
     );
 
     const qid = uid();
@@ -590,6 +612,21 @@ router.get('/events/:id/guestbook', (req, res) => {
     console.error('GET admin guestbook:', err);
     res.status(500).json({ error: 'Unable to read guest book.' });
   }
+});
+
+router.get('/events/:id/requests', (req, res) => {
+  const event = eventById(req.params.id);
+  if (!event) return res.status(404).json({ error: 'Event not found.' });
+  const rows = requests.list(event.id);
+  res.json({ count: rows.length, requests: rows.map(requests.serialize) });
+});
+
+router.delete('/events/:id/requests/:requestId', (req, res) => {
+  const event = eventById(req.params.id);
+  if (!event) return res.status(404).json({ error: 'Event not found.' });
+  const info = requests.remove(req.params.requestId, event.id);
+  if (!info.changes) return res.status(404).json({ error: 'Request not found.' });
+  res.json({ ok: true });
 });
 
 router.get('/events/:id/rsvp', (req, res) => {

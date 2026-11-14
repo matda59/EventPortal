@@ -18,6 +18,7 @@
   const GUESTBOOK_URL = `/api/events/${EVENT_SLUG}/guestbook`;
   const GALLERY_URL = `/api/events/${EVENT_SLUG}/gallery`;
   const RSVP_URL = `/api/events/${EVENT_SLUG}/rsvp`;
+  const REQUESTS_URL = `/api/events/${EVENT_SLUG}/requests`;
   const QUESTIONS_URL = `/api/events/${EVENT_SLUG}/questions`;
 
   // ── App state ──────────────────────────────────────────────────────
@@ -37,6 +38,7 @@
     rsvpName: '',
     rsvpStatus: 'yes',
     rsvpSummary: null,
+    requestName: '',
     guestbookAvatar: '',
     guestbookAvatarFile: null,
     lightboxIndex: 0,
@@ -56,6 +58,7 @@
     guestbook:  $('screen-guestbook'),
     gallery:    $('screen-gallery'),
     rsvp:       $('screen-rsvp'),
+    schedule:   $('screen-schedule'),
     hof:        $('screen-hof'),
     music:      $('screen-music'),
     welcome:    $('screen-welcome'),
@@ -105,6 +108,8 @@
     if ($('home-description')) $('home-description').textContent = message || '';
     if ($('home-when')) $('home-when').hidden = true;
     if ($('home-countdown')) $('home-countdown').hidden = true;
+    if ($('home-share')) $('home-share').hidden = true;
+    if ($('home-share-note')) $('home-share-note').hidden = true;
     if ($('home-nav')) {
       $('home-nav').innerHTML = '';
       addMusicTile($('home-nav'));
@@ -424,12 +429,31 @@
       $('home-description').textContent =
         meta.description || ecard.message || meta.welcomeMessage || copy.greeting;
     }
-    const when = [formatStartTime(meta.startTime), meta.venue].filter(Boolean).join(' · ');
+    const timeText = formatStartTime(meta.startTime);
+    const timeEl = $('home-time');
+    const placeEl = $('home-place');
+    const dotEl = $('home-when-dot');
     const whenEl = $('home-when');
-    if (whenEl) {
-      whenEl.textContent = when;
-      whenEl.hidden = !when;
+    if (timeEl) {
+      timeEl.textContent = timeText;
+      timeEl.hidden = !timeText;
     }
+    if (placeEl) {
+      if (meta.venue) {
+        placeEl.textContent = meta.venue;
+        placeEl.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(meta.venue);
+        placeEl.hidden = false;
+      } else {
+        placeEl.hidden = true;
+        placeEl.removeAttribute('href');
+      }
+    }
+    if (dotEl) dotEl.hidden = !(timeText && meta.venue);
+    if (whenEl) whenEl.hidden = !(timeText || meta.venue);
+    const shareBtn = $('home-share');
+    if (shareBtn) shareBtn.hidden = false;
+    const shareNote = $('home-share-note');
+    if (shareNote) shareNote.hidden = true;
     const countdown = countdownLabel(meta.eventDate, meta.startTime);
     const countEl = $('home-countdown');
     if (countEl) {
@@ -462,6 +486,15 @@
         emoji: '✉️',
         title: 'RSVP',
         hint,
+      });
+    }
+    const schedule = orderedSchedule(meta.schedule);
+    if (schedule.length) {
+      tiles.push({
+        id: 'schedule',
+        emoji: '🗓️',
+        title: 'Schedule',
+        hint: `${schedule.length} moment${schedule.length === 1 ? '' : 's'}`,
       });
     }
     if (f.enableQuiz) {
@@ -508,7 +541,7 @@
         id: 'music',
         emoji: '🎵',
         title: 'Music',
-        hint: count ? `${count} song${count === 1 ? '' : 's'}` : 'Play the playlist',
+        hint: count ? `${count} song${count === 1 ? '' : 's'} · request one` : 'Play the playlist or request a song',
       });
     }
 
@@ -528,6 +561,7 @@
       btn.addEventListener('click', () => {
         if (t.id === 'quiz') openQuiz();
         else if (t.id === 'rsvp') openRsvp();
+        else if (t.id === 'schedule') openSchedule();
         else if (t.id === 'guestbook') openGuestbook();
         else if (t.id === 'gallery') openGallery();
         else if (t.id === 'hof') openHof();
@@ -596,7 +630,112 @@
 
   function openMusic() {
     renderMusicList();
+    const name = state.requestName || rememberedName();
+    if ($('request-name') && name) $('request-name').value = name;
+    loadRequests();
     showScreen('music');
+  }
+
+  function orderedSchedule(list) {
+    const items = (Array.isArray(list) ? list : []).filter((item) => item && item.title);
+    const timed = [];
+    const rest = [];
+    items.forEach((item, i) => {
+      if (/^\d{2}:\d{2}$/.test(item.time || '')) timed.push({ item, i });
+      else rest.push(item);
+    });
+    timed.sort((a, b) => a.item.time.localeCompare(b.item.time) || a.i - b.i);
+    return timed.map((entry) => entry.item).concat(rest);
+  }
+
+  function openSchedule() {
+    const list = orderedSchedule(((state.config && state.config.meta) || {}).schedule);
+    const host = $('schedule-public');
+    if (host) {
+      host.innerHTML = list.map((item) => {
+        const time = formatStartTime(item.time);
+        return `<li class="schedule-item">${time ? `<time>${escHtml(time)}</time>` : ''}<strong>${escHtml(item.title)}</strong>${item.note ? `<p>${escHtml(item.note)}</p>` : ''}</li>`;
+      }).join('') || '<li class="hof-empty">The hosts have not added a running order yet.</li>';
+    }
+    showScreen('schedule');
+  }
+
+  async function shareEvent() {
+    const url = location.href;
+    const note = $('home-share-note');
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: eventLabel(), url });
+        return;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      if (note) {
+        note.textContent = 'Link copied.';
+        note.hidden = false;
+      }
+    } catch {
+      if (note) {
+        note.textContent = url;
+        note.hidden = false;
+      }
+    }
+  }
+
+  function renderRequests(rows) {
+    const host = $('request-list');
+    if (!host) return;
+    const list = Array.isArray(rows) ? rows : [];
+    host.innerHTML = list.length
+      ? list.map((row) => `<p class="question-bank-item"><strong>${escHtml(row.title)}</strong> · ${escHtml(row.name)}${row.note ? `<br>${escHtml(row.note)}` : ''}</p>`).join('')
+      : '';
+  }
+
+  async function loadRequests() {
+    try {
+      const data = await apiJson(REQUESTS_URL);
+      renderRequests(data.requests);
+    } catch {
+      renderRequests([]);
+    }
+  }
+
+  async function onRequestSubmit(e) {
+    e.preventDefault();
+    const errEl = $('request-error');
+    const okEl = $('request-ok');
+    if (okEl) okEl.hidden = true;
+    const name = ($('request-name')?.value || '').trim();
+    const title = ($('request-title')?.value || '').trim();
+    const note = ($('request-note')?.value || '').trim();
+    if (!name || !title) {
+      if (errEl) {
+        errEl.textContent = !name ? 'Please enter your name.' : 'Name the song you want to hear.';
+        errEl.hidden = false;
+      }
+      return;
+    }
+    if (errEl) errEl.hidden = true;
+    try {
+      const data = await apiJson(REQUESTS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, title, note }),
+      });
+      state.requestName = name;
+      renderRequests(data.requests);
+      if ($('request-title')) $('request-title').value = '';
+      if ($('request-note')) $('request-note').value = '';
+      if (okEl) okEl.hidden = false;
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = err.message || 'Could not save that request.';
+        errEl.hidden = false;
+      }
+    }
   }
 
   function addMusicTile(nav) {
@@ -611,13 +750,13 @@
     btn.innerHTML =
       '<span class="home-tile-emoji">🎵</span>' +
       '<span class="home-tile-title">Music</span>' +
-      `<span class="home-tile-hint">${count ? `${count} song${count === 1 ? '' : 's'}` : 'Play the playlist'}</span>`;
+      `<span class="home-tile-hint">${count ? `${count} song${count === 1 ? '' : 's'} · request one` : 'Play the playlist or request a song'}</span>`;
     btn.addEventListener('click', openMusic);
     nav.appendChild(btn);
   }
 
   function rememberedName() {
-    return state.addQuestionName || state.guestbookName || state.galleryName || state.playerName || '';
+    return state.addQuestionName || state.guestbookName || state.galleryName || state.rsvpName || state.requestName || state.playerName || '';
   }
 
   function renderQuestionBank() {
@@ -1103,6 +1242,8 @@
   // ── Welcome / name entry ───────────────────────────────────────────
   function wireEvents() {
     $('home-polaroids')?.addEventListener('click', onEnlargeClick);
+    $('home-share')?.addEventListener('click', () => { shareEvent(); });
+    $('request-form')?.addEventListener('submit', onRequestSubmit);
     $('nav-home')?.addEventListener('click', () => {
       if ($('screen-results')?.classList.contains('active')) closeResults();
       else goHome();

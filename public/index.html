@@ -53,10 +53,20 @@
           <span id="home-name">Loading…</span>
         </h1>
         <p class="home-desc" id="home-description"></p>
-        <p class="home-when" id="home-when" hidden></p>
+        <p class="home-when" id="home-when" hidden>
+          <span id="home-time"></span><span id="home-when-dot" hidden> · </span><a id="home-place" target="_blank" rel="noopener noreferrer" hidden></a>
+        </p>
         <p class="home-countdown" id="home-countdown" hidden></p>
+        <button type="button" id="home-share" class="home-share" hidden>Share this event</button>
+        <p id="home-share-note" class="home-share-note" hidden></p>
         <nav id="home-nav" class="home-nav" aria-label="Event menu"></nav>
       </div>
+    </section>
+
+    <section id="screen-schedule" class="screen card">
+      <h1 class="title">Schedule</h1>
+      <p class="lead">What's happening, and when.</p>
+      <ol id="schedule-public" class="schedule-list"></ol>
     </section>
 
     <section id="screen-rsvp" class="screen card">
@@ -144,6 +154,22 @@
       <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.3" title="Volume" />
       <p id="music-error" class="error-text" role="alert" hidden></p>
       <ul id="music-list" class="music-list"></ul>
+      <form id="request-form" class="name-form request-form" novalidate>
+        <h2 class="request-heading">Request a song</h2>
+        <label for="request-name" class="field-label">Your name</label>
+        <input id="request-name" class="text-input" type="text" maxlength="30"
+               placeholder="Enter your name…" autocomplete="name" />
+        <label for="request-title" class="field-label" style="margin-top:14px">Song</label>
+        <input id="request-title" class="text-input" type="text" maxlength="120"
+               placeholder="Artist — song title" />
+        <label for="request-note" class="field-label" style="margin-top:14px">Note <span class="optional">(optional)</span></label>
+        <input id="request-note" class="text-input" type="text" maxlength="160"
+               placeholder="For the first dance, a dedication…" />
+        <p id="request-error" class="error-text" role="alert" hidden></p>
+        <p id="request-ok" class="quiz-added" hidden>Requested. The hosts can see it.</p>
+        <button type="submit" class="btn btn-primary btn-block">Request this song</button>
+      </form>
+      <div id="request-list" class="question-bank"></div>
     </section>
 
     <section id="screen-hof" class="screen card">
