@@ -188,7 +188,7 @@ async function readLimited(req, limit, tooLargeMessage) {
   return Buffer.concat(chunks, size);
 }
 
-function parseMultipartFile(buffer, contentType) {
+function parseMultipartFile(buffer, contentType, options) {
   const m = String(contentType || '').match(/multipart\/form-data\s*;\s*boundary=(?:"([^"]+)"|([^;]+))/i);
   if (!m) {
     const err = new Error('Expected multipart form upload.');
@@ -232,6 +232,7 @@ function parseMultipartFile(buffer, contentType) {
     offset = next;
   }
   if (!file || !file.buffer || !file.buffer.length) {
+    if (options && options.allowMissing) return { filename: '', buffer: null, fields };
     const err = new Error('Choose a file to upload.');
     err.status = 400;
     throw err;

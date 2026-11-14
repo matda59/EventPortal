@@ -390,6 +390,22 @@ button.music-track.is-playing { border-color: var(--primary-red); color: var(--p
 }
 .quiz-option .text-input { margin: 0; }
 .quiz-added { margin-top: 10px; font-weight: 700; color: #2f7d4a; }
+.question-photo-preview {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  margin: 0 0 12px;
+  border: 2px solid var(--border-soft);
+}
+.question-bank-photo {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex: none;
+}
 .question-bank {
   margin-top: 18px;
   display: grid;
@@ -398,6 +414,9 @@ button.music-track.is-playing { border-color: var(--primary-red); color: var(--p
   overflow: auto;
 }
 .question-bank-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 10px 12px;
   background: var(--bg-earth);
   border-radius: var(--radius-sm);

@@ -123,7 +123,11 @@ function cleanGuestQuestion(body) {
   const question = typeof body?.question === 'string' ? body.question.trim().slice(0, 400) : '';
   if (!question) return { error: 'Write a question.' };
 
-  const raw = Array.isArray(body?.options) ? body.options : [];
+  let rawOptions = body?.options;
+  if (typeof rawOptions === 'string') {
+    try { rawOptions = JSON.parse(rawOptions); } catch { rawOptions = []; }
+  }
+  const raw = Array.isArray(rawOptions) ? rawOptions : [];
   const options = raw
     .map((option) => String(option ?? '').trim().slice(0, 120))
     .filter(Boolean);
@@ -409,20 +413,48 @@ app.get('/api/events/:slug/questions', (req, res) => {
   }
 });
 
-app.post('/api/events/:slug/questions', limitQuestions, (req, res) => {
+const QUESTION_PHOTO_MAX = 8 * 1024 * 1024;
+
+app.post('/api/events/:slug/questions', limitQuestions, async (req, res) => {
+  let written = null;
   try {
     const event = findActiveEvent(req.params.slug);
     if (!event) return res.status(404).json({ error: 'Event not found.' });
     if (!event.enable_quiz) return res.status(403).json({ error: 'Quiz is not enabled for this event.' });
 
-    const parsed = cleanGuestQuestion(req.body || {});
+    let body = req.body || {};
+    let photo = null;
+    const contentType = String(req.headers['content-type'] || '');
+    if (/multipart\/form-data/i.test(contentType)) {
+      const raw = await files.readLimited(req, QUESTION_PHOTO_MAX, 'Photo must be under 8 MB.');
+      const uploaded = files.parseMultipartFile(raw, contentType, { allowMissing: true });
+      body = uploaded.fields || {};
+      if (uploaded.buffer && uploaded.buffer.length) photo = uploaded.buffer;
+    }
+
+    const parsed = cleanGuestQuestion(body);
     if (parsed.error) return res.status(400).json({ error: parsed.error });
+
+    let imageUrl = null;
+    if (photo) {
+      const ext = sniffImageExt(photo);
+      if (!ext) return res.status(400).json({ error: 'Photo must be a jpg, png, gif, or webp.' });
+      const dir = files.eventMediaDir('image', event.id);
+      if (!dir) return res.status(400).json({ error: 'Invalid event.' });
+      const photoDir = path.join(dir, 'questions');
+      await fsp.mkdir(photoDir, { recursive: true });
+      const filename = `question-${uid()}${ext}`;
+      written = path.join(photoDir, filename);
+      await fsp.writeFile(written, photo);
+      imageUrl = `/images/${event.id}/questions/${filename}`;
+    }
 
     const quiz = ensureQuiz(event);
     const count = db.prepare(
       'SELECT COUNT(*) AS n FROM quiz_questions WHERE quiz_id = ?'
     ).get(quiz.id).n;
     if (count >= MAX_QUESTIONS) {
+      if (written) await fsp.unlink(written).catch(() => {});
       return res.status(400).json({ error: 'This quiz is full.' });
     }
 
@@ -434,11 +466,12 @@ app.post('/api/events/:slug/questions', limitQuestions, (req, res) => {
       INSERT INTO quiz_questions
         (id, quiz_id, sort_order, submitted_by, question_type, question,
          image_url, options_json, correct_index, fun_fact, audio_clip)
-      VALUES (?, ?, ?, ?, 'text', ?, NULL, ?, ?, ?, NULL)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
     `).run(
-      id, quiz.id, max + 1, parsed.name, parsed.question,
-      JSON.stringify(parsed.options), parsed.correctIndex, parsed.funFact,
+      id, quiz.id, max + 1, parsed.name, imageUrl ? 'photo' : 'text', parsed.question,
+      imageUrl, JSON.stringify(parsed.options), parsed.correctIndex, parsed.funFact,
     );
+    written = null;
     db.prepare("UPDATE events SET updated_at = datetime('now') WHERE id = ?").run(event.id);
 
     const questions = questionsForQuiz(quiz.id);
@@ -448,8 +481,11 @@ app.post('/api/events/:slug/questions', limitQuestions, (req, res) => {
       questions: questions.map((q) => presentQuestion(event.id, q)),
     });
   } catch (err) {
-    console.error('POST questions:', err);
-    res.status(500).json({ error: 'Unable to save question.' });
+    if (written) await fsp.unlink(written).catch(() => {});
+    const status = err.status || 500;
+    if (status >= 500) console.error('POST questions:', err);
+    const message = status >= 500 ? 'Unable to save question.' : (err.message || 'Unable to save question.');
+    res.status(status).json({ error: message });
   }
 });
 

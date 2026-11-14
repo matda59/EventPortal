@@ -135,19 +135,24 @@
         <input id="player-name" class="text-input" type="text" maxlength="30"
                placeholder="Enter your name…" autocomplete="off" />
         <p id="name-error" class="error-text" role="alert" hidden>Please enter your name to start.</p>
-        <p id="quiz-empty-note" class="quiz-empty-note" hidden>No questions yet. Add one below, then start.</p>
+        <p id="quiz-empty-note" class="quiz-empty-note" hidden>No questions yet. Add one, then start.</p>
         <button type="submit" class="btn btn-primary btn-block">Start Quiz →</button>
+        <button type="button" class="btn btn-secondary btn-block" id="quiz-add-toggle" aria-expanded="false" aria-controls="quiz-add">Add a question</button>
       </form>
-      <div id="quiz-add" class="quiz-add">
+      <div id="quiz-add" class="quiz-add" hidden>
         <h2>Add a question</h2>
-        <p class="lead">Write one for the other guests. Fill in at least two answers and mark the right one.</p>
+        <p class="lead">Write one for the other guests. Add a photo if you want to ask something like when it was taken. Mark the right answer.</p>
         <form id="question-form" class="name-form" novalidate>
           <label for="add-question-name" class="field-label">Your name</label>
           <input id="add-question-name" class="text-input" type="text" maxlength="30"
                  placeholder="Enter your name…" autocomplete="name" />
           <label for="add-question-text" class="field-label" style="margin-top:14px">Question</label>
           <textarea id="add-question-text" class="text-input guestbook-message" maxlength="400"
-                    placeholder="What should everyone answer?" rows="2"></textarea>
+                    placeholder="When was this photo taken?" rows="2"></textarea>
+          <label for="add-question-photo" class="field-label" style="margin-top:14px">Photo <span class="optional">(optional)</span></label>
+          <input id="add-question-photo" class="file-input" type="file"
+                 accept="image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp" />
+          <img id="add-question-preview" class="question-photo-preview" alt="Question photo preview" hidden />
           <span class="field-label" style="margin-top:14px">Answers</span>
           <div class="quiz-options">
             <label class="quiz-option">

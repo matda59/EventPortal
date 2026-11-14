@@ -115,7 +115,6 @@
   function applyGuestFlags() {
     const f = guestFlags();
     $('name-form').hidden       = !f.enableQuiz;
-    if ($('quiz-add')) $('quiz-add').hidden = !f.enableQuiz;
     $('hall-of-fame').hidden    = !f.enableLeaderboard;
     $('play-again-btn').hidden  = !f.enableQuiz;
   }
@@ -560,8 +559,37 @@
     }
     bank.innerHTML = list.map((q) => {
       const by = q.submittedBy ? `<strong>${escHtml(q.submittedBy)}</strong> ` : '';
-      return `<article class="question-bank-item">${by}${escHtml(q.question || '')}</article>`;
+      const photo = q.image && !isVideoSrc(q.image)
+        ? `<img class="question-bank-photo" src="${escHtml(q.image)}" alt="" />`
+        : '';
+      return `<article class="question-bank-item">${photo}<span>${by}${escHtml(q.question || '')}</span></article>`;
     }).join('');
+  }
+
+  function setQuizAddOpen(open) {
+    const panel = $('quiz-add');
+    const toggle = $('quiz-add-toggle');
+    if (panel) panel.hidden = !open;
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      toggle.textContent = open ? 'Close' : 'Add a question';
+    }
+    if (!open) return;
+    const name = rememberedName();
+    if (name && $('add-question-name') && !$('add-question-name').value) {
+      $('add-question-name').value = name;
+    }
+  }
+
+  function clearQuestionPhoto() {
+    const input = $('add-question-photo');
+    const preview = $('add-question-preview');
+    if (input) input.value = '';
+    if (preview) {
+      if (preview.src && preview.src.startsWith('blob:')) URL.revokeObjectURL(preview.src);
+      preview.removeAttribute('src');
+      preview.hidden = true;
+    }
   }
 
   async function refreshQuestions() {
@@ -580,6 +608,7 @@
     const okEl = $('question-form-ok');
     if (errEl) errEl.hidden = true;
     if (okEl) okEl.hidden = true;
+    setQuizAddOpen(false);
     showScreen('welcome');
     renderQuestionBank();
     if (guestFlags().enableQuiz) {
@@ -587,11 +616,14 @@
         await refreshQuestions();
         renderQuestionBank();
       } catch { /* keep the questions loaded with the event */ }
-      setTimeout(() => {
-        const focusId = state.questions.length ? 'player-name' : 'add-question-name';
-        $(focusId)?.focus();
-      }, 300);
+      setTimeout(() => $('player-name')?.focus(), 300);
     }
+  }
+
+  function isQuestionPhoto(file) {
+    if (!file) return false;
+    if (/^image\/(jpeg|png|gif|webp)$/.test(file.type || '')) return true;
+    return /\.(jpe?g|png|gif|webp)$/i.test(file.name || '');
   }
 
   function collectNewQuestion() {
@@ -617,6 +649,7 @@
     const name = $('add-question-name').value.trim();
     const question = $('add-question-text').value.trim();
     const funFact = $('add-question-fact').value.trim();
+    const photo = $('add-question-photo')?.files && $('add-question-photo').files[0];
     const { options, correctIndex } = collectNewQuestion();
     if (!name) {
       errEl.textContent = 'Please enter your name.';
@@ -641,16 +674,38 @@
       errEl.hidden = false;
       return;
     }
+    if (photo && photo.size > 8 * 1024 * 1024) {
+      errEl.textContent = 'Photo must be under 8 MB.';
+      errEl.hidden = false;
+      return;
+    }
+    if (photo && !isQuestionPhoto(photo)) {
+      errEl.textContent = 'Photo must be a jpg, png, gif, or webp.';
+      errEl.hidden = false;
+      return;
+    }
     if (btn) {
       btn.disabled = true;
       btn.textContent = 'Adding…';
     }
     try {
-      const data = await apiJson(QUESTIONS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, question, options, correctIndex, funFact }),
-      });
+      let data;
+      if (photo) {
+        const body = new FormData();
+        body.append('name', name);
+        body.append('question', question);
+        body.append('funFact', funFact);
+        body.append('options', JSON.stringify(options));
+        body.append('correctIndex', String(correctIndex));
+        body.append('file', photo);
+        data = await apiJson(QUESTIONS_URL, { method: 'POST', body });
+      } else {
+        data = await apiJson(QUESTIONS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, question, options, correctIndex, funFact }),
+        });
+      }
       state.addQuestionName = name;
       if (!$('player-name').value) $('player-name').value = name;
       if (Array.isArray(data.questions)) {
@@ -659,6 +714,7 @@
       }
       $('add-question-text').value = '';
       $('add-question-fact').value = '';
+      clearQuestionPhoto();
       for (let i = 0; i < 4; i++) $(`add-question-opt-${i}`).value = '';
       const first = document.querySelector('input[name="add-question-correct"][value="0"]');
       if (first) first.checked = true;
@@ -993,6 +1049,36 @@
     $('guestbook-form')?.addEventListener('submit', onGuestbookSubmit);
     $('gallery-form')?.addEventListener('submit', onGallerySubmit);
     $('question-form')?.addEventListener('submit', onQuestionSubmit);
+    $('quiz-add-toggle')?.addEventListener('click', () => {
+      const open = $('quiz-add')?.hidden !== false;
+      setQuizAddOpen(open);
+      if (open) $('add-question-text')?.focus();
+    });
+    $('add-question-photo')?.addEventListener('change', () => {
+      const file = $('add-question-photo').files && $('add-question-photo').files[0];
+      const preview = $('add-question-preview');
+      const errEl = $('question-form-error');
+      if (!file) {
+        clearQuestionPhoto();
+        return;
+      }
+      if (file.size > 8 * 1024 * 1024 || !isQuestionPhoto(file)) {
+        if (errEl) {
+          errEl.textContent = file.size > 8 * 1024 * 1024
+            ? 'Photo must be under 8 MB.'
+            : 'Photo must be a jpg, png, gif, or webp.';
+          errEl.hidden = false;
+        }
+        clearQuestionPhoto();
+        return;
+      }
+      if (errEl) errEl.hidden = true;
+      if (preview) {
+        if (preview.src && preview.src.startsWith('blob:')) URL.revokeObjectURL(preview.src);
+        preview.src = URL.createObjectURL(file);
+        preview.hidden = false;
+      }
+    });
     $('gallery-grid')?.addEventListener('click', onGalleryOpen);
     renderAvatarChoices();
     wireAvatarPicker();
